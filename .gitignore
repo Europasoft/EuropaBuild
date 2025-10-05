@@ -1,0 +1,14 @@
+.vs/
+*.vcxproj.filters
+*.vcxproj.user
+*.slnLaunch.user
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
