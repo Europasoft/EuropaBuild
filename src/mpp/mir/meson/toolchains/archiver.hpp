@@ -14,7 +14,7 @@
 #include <vector>
 
 #include "common.hpp"
-#include "machines.hpp"
+#include "mpp/mir/meson/machines.hpp"
 
 namespace MIR::Toolchain::Archiver {
 

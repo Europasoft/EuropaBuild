@@ -23,7 +23,7 @@ enum class RSPFileSupport {
 /**
  * The toolchain language
  */
-enum class Language {
+enum class Language : unsigned int {
     CPP,
 };
 

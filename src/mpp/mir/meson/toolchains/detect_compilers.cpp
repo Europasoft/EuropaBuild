@@ -10,9 +10,14 @@
 #include <string>
 #include <vector>
 
+// probably not needed - remove later
+#ifdef _MSC_VER
+#define _SILENCE_CXX20_CONSTRUCT_AT_WARNING
+#endif
+
 #include "compiler.hpp"
 #include "compilers/cpp/cpp.hpp"
-#include "process.hpp"
+#include "mpp/util/process.hpp"
 
 namespace MIR::Toolchain::Compiler {
 
