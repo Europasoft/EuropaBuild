@@ -1,116 +1,296 @@
-// SPDX-License-Identifier: Apache-2.0
-// Copyright © 2021-2025 Intel Corporation
-
-/**
- * Main Meson++ entrypoint
- */
-
-#include "ast_to_mir.hpp"
-#include "backends/ninja/entry.hpp"
-#include "driver.hpp"
-#include "exceptions.hpp"
-#include "log.hpp"
-#include "lower.hpp"
-#include "options.hpp"
-#include "state/state.hpp"
-#include "tools/test.hpp"
-#include "tools/vcs_tag.hpp"
-#include "version.hpp"
 
 #include <filesystem>
 #include <iostream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <fstream>
+
+#include "main.hpp"
+#include "mpp.hpp"
+
 
 namespace fs = std::filesystem;
 
-namespace {
+namespace EuropaBuild
+{
+	EuropaBuild::EuropaBuild(const BuildConfig & config) : config_(config)
+    {}
 
-bool emit_messages(MIR::CFGNode & block) {
-    static std::vector<MIR::MessageLevel> levels{MIR::MessageLevel::MESSAGE,
-                                                 MIR::MessageLevel::WARN, MIR::MessageLevel::ERROR};
-    bool errors = false;
+    int EuropaBuild::build()
+    {
+        try
+        {
+            std::cout << "EuropaBuild C++" << std::endl
+                      << "Source dir: " << fs::absolute(config_.source_dir).string()
+                      << std::endl
+                      << "Build dir: " << fs::absolute(config_.build_dir).string()
+                      << std::endl
+                      << "Output: " << config_.output_name << std::endl
+                      << "Type: " << config_.build_type << std::endl;
 
-    for (const auto & level : levels) {
-        if (level == MIR::MessageLevel::MESSAGE) {
-            std::cout << Util::Log::bold("User Messages:") << std::endl;
-        } else if (level == MIR::MessageLevel::WARN) {
-            std::cout << Util::Log::yellow("Warnings:") << std::endl;
-        } else if (level == MIR::MessageLevel::ERROR) {
-            std::cout << Util::Log::red("Errors:") << std::endl;
-        } else if (level == MIR::MessageLevel::DEBUG) {
-            std::cout << Util::Log::bold("Debug information:") << std::endl;
+            // create build directory
+            if (!fs::exists(config_.build_dir))
+            {
+                fs::create_directories(config_.build_dir);
+            }
+
+            // discover c++ source files
+            auto source_files = discoverSourceFiles();
+            if (source_files.empty())
+            {
+                std::cerr << "No C++ source files found in " << config_.source_dir << std::endl;
+                return 1;
+            }
+
+            std::cout << "Found " << source_files.size() << " source files" << std::endl;
+
+            // detect compiler
+            auto compiler = detectCompiler();
+            if (!compiler)
+            {
+                std::cerr << "No suitable C++ compiler found" << std::endl;
+                return 1;
+            }
+
+            std::cout << "Using compiler: " << compiler->id() << std::endl;
+
+            // generate ninja build file
+            generateNinjaBuild(source_files, compiler.get());
+
+            std::cout << "Build configuration generated" << std::endl;
+            std::cout << "Run 'ninja' in the build directory to compile" << std::endl;
+
+            return 0;
         }
-        for (const auto & i : block.block->instructions) {
-            if (std::holds_alternative<MIR::MessagePtr>(i)) {
-                const auto & m = std::get<MIR::MessagePtr>(i);
-                if (m->level == level) {
-                    std::cout << Util::Log::bold(" *  ") << m->message << std::endl;
-                }
-                if (m->level == MIR::MessageLevel::ERROR) {
-                    errors = true;
+        catch (const std::exception & e)
+        {
+            std::cerr << "Build error: " << e.what() << std::endl;
+            return 1;
+        }
+    }
+    
+    std::vector<fs::path> EuropaBuild::discoverSourceFiles()
+    {
+        std::vector<fs::path> source_files;
+
+        for (const auto & entry : fs::recursive_directory_iterator(config_.source_dir))
+        {
+            if (entry.is_regular_file()) {
+                const auto & path = entry.path();
+                const auto ext = path.extension();
+
+                if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c++")
+                {
+                    source_files.push_back(fs::relative(path, config_.source_dir));
                 }
             }
         }
+
+        std::sort(source_files.begin(), source_files.end());
+        return source_files;
     }
-    return errors;
+    
+    std::unique_ptr<MPP::Compiler> EuropaBuild::detectCompiler()
+    {
+        const std::vector<std::string> compilers = { "g++", "clang++", "c++" };
+
+        for (const auto & compiler_name : compilers)
+        {
+            auto compiler = MPP::Compilers::detect_compiler(MPP::ELanguage::CPP, MPP::EMachine::BUILD, {compiler_name});
+            if (compiler)
+            {
+                return compiler;
+            }
+        }
+
+        return nullptr;
+    }
+    
+    void EuropaBuild::generateNinjaBuild(const std::vector<fs::path> & source_files,
+                                             MPP::Compiler * compiler)
+    {
+        std::ofstream out(config_.build_dir / "build.ninja");
+
+        out << "# EuropaBuild C++ Build System" << std::endl
+            << "# Generated build file" << std::endl
+            << std::endl
+            << "ninja_required_version = 1.8.2" << std::endl
+            << std::endl;
+
+        // Write compiler rule
+        writeCompilerRule(out, compiler);
+
+        // Write linker/archiver rules
+        if (config_.build_type == "exe")
+        {
+            writeLinkerRule(out, compiler);
+        }
+        else
+        {
+            writeArchiverRule(out, compiler);
+        }
+
+        // Write build rules for each source file
+        std::vector<std::string> object_files;
+        for (const auto & source_file : source_files)
+        {
+            std::string obj_file = source_file.stem().string() + ".o";
+            object_files.push_back(obj_file);
+
+            out << "build " << obj_file << ": cpp_compile " << source_file << std::endl;
+            out << "  ARGS =";
+            for (const auto & arg : config_.cpp_args)
+            {
+                out << " " << arg;
+            }
+            out << std::endl << std::endl;
+        }
+
+        // Write final target rule
+        if (config_.build_type == "exe")
+        {
+            out << "build " << config_.output_name << ": cpp_link";
+            for (const auto & obj : object_files)
+            {
+                out << " " << obj;
+            }
+            out << std::endl << std::endl;
+        }
+        else
+        {
+            out << "build " << config_.output_name << ": cpp_archive";
+            for (const auto & obj : object_files)
+            {
+                out << " " << obj;
+            }
+            out << std::endl << std::endl;
+        }
+
+        out << "default " << config_.output_name << std::endl;
+    }
+    
+    void EuropaBuild::writeCompilerRule(std::ofstream & out, MPP::Compiler * compiler)
+    {
+        out << "rule cpp_compile" << std::endl << "  command =";
+
+        for (const auto & cmd : compiler->command)
+        {
+            out << " " << cmd;
+        }
+
+        // add compile-only and output commands
+        auto compile_cmd = compiler->compile_only_command();
+        for (const auto & arg : compile_cmd)
+        {
+            out << " " << arg;
+        }
+
+        out << " ${ARGS} -o ${out} ${in}" << std::endl
+            << "  description = Compiling C++ object ${out}" << std::endl
+            << std::endl;
+    }
+    
+    void EuropaBuild::writeLinkerRule(std::ofstream & out, MPP::Compiler * compiler)
+    {
+        out << "rule cpp_link" << std::endl << "  command =";
+
+        for (const auto & cmd : compiler->command)
+        {
+            out << " " << cmd;
+        }
+
+        out << " ${ARGS} -o ${out} ${in}" << std::endl
+            << "  description = Linking executable ${out}" << std::endl
+            << std::endl;
+    }
+    
+    void EuropaBuild::writeArchiverRule(std::ofstream & out, MPP::Compiler * compiler)
+    {
+        out << "rule cpp_archive" << std::endl
+            << "  command = ar rcs ${out} ${in}" << std::endl
+            << "  description = Creating static library ${out}" << std::endl
+            << std::endl;
+    }
+    
+    BuildConfig parse_arguments(int argc, char * argv[])
+    {
+        BuildConfig config;
+        config.source_dir = fs::current_path();
+        config.build_dir = fs::current_path() / "build";
+        config.output_name = "app";
+        config.build_type = "exe";
+
+        for (int i = 1; i < argc; i++)
+        {
+            std::string arg = argv[i];
+
+            if (arg == "--help" || arg == "-h")
+            {
+                std::cout << "Simple C++ Build System" << std::endl
+                          << "Usage: " << argv[0] << " [options]" << std::endl
+                          << "Options:" << std::endl
+                          << "  --source-dir DIR    Source directory (default: current directory)"
+                          << std::endl
+                          << "  --build-dir DIR     Build directory (default: ./build)" << std::endl
+                          << "  --output NAME       Output name (default: app)" << std::endl
+                          << "  --type TYPE         Build type: exe or lib (default: exe)" << std::endl
+                          << "  --cpp-arg ARG       Additional C++ compiler arguments" << std::endl
+                          << "  --verbose           Verbose output" << std::endl
+                          << "  --help, -h          Show this help" << std::endl;
+                exit(0);
+            }
+            else if (arg == "--source-dir" && i + 1 < argc)
+            {
+                config.source_dir = fs::absolute(argv[++i]);
+            }
+            else if (arg == "--build-dir" && i + 1 < argc)
+            {
+                config.build_dir = fs::absolute(argv[++i]);
+            }
+            else if (arg == "--output" && i + 1 < argc)
+            {
+                config.output_name = argv[++i];
+            }
+            else if (arg == "--type" && i + 1 < argc)
+            {
+                config.build_type = argv[++i];
+                if (config.build_type != "exe" && config.build_type != "lib") {
+                    std::cerr << "Invalid build type. Must be 'exe' or 'lib'" << std::endl;
+                    exit(1);
+                }
+            }
+            else if (arg == "--cpp-arg" && i + 1 < argc)
+            {
+                config.cpp_args.push_back(argv[++i]);
+            }
+            else if (arg == "--verbose")
+            {
+                config.verbose = true;
+            }
+            else
+            {
+                std::cerr << "Unknown argument: " << arg << std::endl;
+                exit(1);
+            }
+        }
+
+        return config;
+    }
+    
 }
 
-int configure(const Options::ConfigureOptions & opts) {
-    std::cout << Util::Log::bold("The Meson++ build system") << std::endl
-              << "Version: " << version::VERSION << std::endl
-              << "Source dir: " << Util::Log::bold(fs::absolute(opts.sourcedir)) << std::endl
-              << "Build dir: " << Util::Log::bold(fs::absolute(opts.builddir)) << std::endl;
-
-    // Parse the source into a an AST
-    Frontend::Driver drv{};
-    auto block = drv.parse(opts.sourcedir / "meson.build");
-
-    MIR::State::Persistant pstate{opts.sourcedir, opts.builddir, opts.program};
-
-    // Create IR from the AST, then run our lowering passes on it
-    MIR::CFG irlist = MIR::lower_ast(block, pstate);
-    MIR::Passes::lower_project(irlist.root, pstate);
-    MIR::lower(irlist.root, pstate);
-
-    const bool errors = emit_messages(*irlist.root);
-    if (errors) {
-        throw Util::Exceptions::MesonException("Configure failed with errors.");
-    }
-
-    Backends::Ninja::generate(*irlist.root, pstate);
-
-    return 0;
-};
-
-int test(const Options::TestOptions & opts) {
-    auto && path = opts.builddir / "tests.serialized";
-    if (!fs::exists(path)) {
-        std::cout << "No tests defined" << std::endl;
-        return 0;
-    }
-
-    auto && tests = Backends::Common::load_tests(path);
-    return Tools::run_tests(tests, fs::absolute(opts.builddir));
-}
-
-struct OptionHandler {
-    int operator()(const Options::ConfigureOptions & opts) { return configure(opts); }
-    int operator()(const Options::TestOptions & opts) { return test(opts); }
-    int operator()(const Options::VCSTagOptions & opts) {
-        return Tools::generate_vcs_tag(opts.infile, opts.outfile, opts.version, opts.replacement,
-                                       opts.source_dir, opts.depfile);
-    }
-};
-
-} // namespace
-
-int main(int argc, char * argv[]) {
-    auto && opts = Options::parse_opts(argc, argv);
-
-    try {
-        return std::visit(OptionHandler{}, opts);
-    } catch (Util::Exceptions::MesonException & e) {
-        std::cerr << "Meson++ error: " << e.what() << std::endl;
-    } catch (std::exception & e) {
-        std::cerr << "Uncaught general exceptions: " << e.what() << std::endl;
+int main(int argc, char* argv[]) 
+{
+    try 
+    {
+        auto config = EuropaBuild::parse_arguments(argc, argv);
+        EuropaBuild::EuropaBuild builder(config);
+        return builder.build();
+    } 
+    catch (const std::exception& e) 
+    {
+        std::cerr << "Error: " << e.what() << std::endl;
+        return 1;
     }
 }
