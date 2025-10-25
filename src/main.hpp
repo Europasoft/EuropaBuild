@@ -1,51 +1,59 @@
 
 #pragma once
+#include <config_types.hpp>
+//#include "mpp_fdecl.hpp"
+
 #include <filesystem>
 #include <iostream>
 #include <vector>
 #include <string>
 #include <algorithm>
 #include <fstream>
-
-#include "mpp_fdecl.hpp"
+#include <memory>
+#include "config.hpp"
 
 namespace EuropaBuild 
 {
-    namespace fs = std::filesystem;
+	namespace fs = std::filesystem;
 
-    struct BuildConfig 
-    {
-        fs::path source_dir;
-        fs::path build_dir;
-        std::string output_name;
-        std::string build_type; // "exe" or "lib"
-        std::vector<std::string> cpp_args;
-        bool verbose = false;
-    };
+	struct TargetMapping
+	{
+		std::shared_ptr<const Target> target = nullptr;
+		std::vector<fs::path> sourceFiles;
+	};
 
-    class EuropaBuild
-    {
-    public:
-		EuropaBuild(const BuildConfig& config);
-        
-        int build();
-    
-    private:
-        BuildConfig config_;
-    
-        std::vector<fs::path> discoverSourceFiles();
-    
-        std::unique_ptr<MPP::Compiler> detectCompiler();
-    
-        void generateNinjaBuild(const std::vector<fs::path>& source_files, MPP::Compiler* compiler);
-    
-        void writeCompilerRule(std::ofstream& out, MPP::Compiler* compiler);
-    
-        void writeLinkerRule(std::ofstream & out, MPP::Compiler * compiler);
-    
-        void writeArchiverRule(std::ofstream& out, MPP::Compiler* compiler);
-    };
+	class BuildTool
+	{
+	public:
+		BuildTool(std::shared_ptr<const BuildConfig2> config);
+		
+		int build();
 
-    BuildConfig parse_arguments(int argc, char* argv[]);
-    
-} // namespace SimpleBuild
+		ESLogVerbosity getLogVerbosity() const;
+	
+	private:
+		std::shared_ptr<const BuildConfig2> _config;
+
+		ESLog log;
+	
+		std::vector<fs::path> discoverSourceFiles(const std::vector<fs::path>& paths);
+	
+		//std::unique_ptr<MPP::Compiler> detectCompiler();
+	
+		//void generateNinjaBuild(std::shared_ptr<std::vector<TargetMapping>> mappings, MPP::Compiler* compiler);
+	
+		//void writeCompilerRule(std::ofstream& out, MPP::Compiler* compiler);
+	
+		//void writeLinkerRule(std::ofstream & out, MPP::Compiler * compiler);
+	
+		//void writeArchiverRule(std::ofstream& out, MPP::Compiler* compiler);
+
+		//std::string sourceFilePathToString(const fs::path& path);
+
+		int8_t runNinja();
+
+		static void createRelativeDirectory(const fs::path& path);
+	};
+
+
+} // namespace EuropaBuild

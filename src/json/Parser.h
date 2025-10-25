@@ -4,14 +4,17 @@
 #include <vector>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <memory>
+#include <cstdint>
 
-#define STC_SBR_L '['
-#define STC_SBR_R ']'
-#define STC_CBR_L '{'
-#define STC_CBR_R '}'
-#define STC_CL ':'
-#define STC_CM ','
-#define STR_DELIM '"'
+constexpr auto STC_SBR_L = '[';
+constexpr auto STC_SBR_R = ']';
+constexpr auto STC_CBR_L = '{';
+constexpr auto STC_CBR_R = '}';
+constexpr auto STC_CL = ':';
+constexpr auto STC_CM = ',';
+constexpr auto STR_DELIM = '"';
 
 namespace JSONTextUtils
 {
@@ -53,6 +56,10 @@ namespace JSON
 {
 	using str_view = JSONTextUtils::str_view;
 	using str_t = JSONTextUtils::str_t;
+	class Object;
+	using ObjectPtr = std::shared_ptr<Object>;
+	using SubobjectIterator = std::vector<ObjectPtr>::const_iterator;
+	using std::uint32_t;
 
 	enum class ObjectType { Undefined, Object, Array, String, Number, Boolean, Null };
 
@@ -66,49 +73,62 @@ namespace JSON
 		Object(ObjectType t, JSONTextUtils::str_view n, JSONTextUtils::str_view v) : type{ t }, name{ n }, value{ v } {};
 		void reset();
 
-		bool isNamed() const;
-		bool isValue() const;
-		bool isContainer() const;
-		JSONTextUtils::str_view getValue() const;
+		bool isNamed() const noexcept;
+		str_view getName() const noexcept;
+		bool isValue() const noexcept;
+		bool isContainer() const noexcept;
+		bool isArray() const noexcept;
+		bool hasNamedSubobject(str_view name) const noexcept;
+		JSONTextUtils::str_view getValue() const noexcept;
+		ObjectType getType() const noexcept;
 		size_t size() const noexcept;
 		void set(ObjectType t, JSONTextUtils::str_view v);
 
-	public:
-		JSONTextUtils::str_t toString(bool readable = true) const;
+		JSONTextUtils::str_t toString(bool readable = true) const noexcept;
+		
+		Object& operator[](size_t i);
+		const Object& operator[](size_t i) const;
+		const ObjectPtr getNamedSubobject(str_view name) const noexcept;
+		ObjectPtr getNamedSubobject(str_view name) noexcept;
+		const Object& operator[](str_view name) const;
+		Object& operator[](str_view name);
+		std::map<std::string, ObjectPtr> map() const;
+		std::vector<std::string> vector() const;
+		
 	private:
 		JSONTextUtils::str_t getSubobjectsAsStringInternal(size_t& depth, bool readable) const;
-	public:
+		SubobjectIterator getNamedSubobjectIteratorInternal(str_view name) const noexcept;
 
-		Object& operator[](int i) { return subobjects[i]; }
-		const Object& operator[](int i) const { return subobjects[i]; }
-
+	protected:
 		JSONTextUtils::str_t name;
-		std::vector<Object> subobjects;
 		ObjectType type;
+		std::vector<ObjectPtr> subobjects;
 		JSONTextUtils::str_t value;
-
-
+	public:
+		SubobjectIterator begin() const noexcept { return subobjects.begin(); }
+		SubobjectIterator end() const noexcept { return subobjects.end(); }
+		void push_back(ObjectPtr subobject);
 	};
 
-	enum class Result
+	enum class Result : uint32_t
 	{
 		OK = 0,
-		Error_Lexer_InvalidEncoding				= 1,	// unsupported character encoding
-		Error_Lexer_IllegalToken				= 2,	// disallowed ASCII in structural text
-		Error_Lexer_IllegalTokenMultiByte		= 3,	// multi-byte character in structural text
-		Error_Lexer_IncompleteUnicodeInString	= 4,	// incomplete or corrupted multi-byte codepoint
-		Error_File								= 5,	// failure to read file
-		Error_Parser_NoTokens					= 6,	// lexer succeeded, but no tokens were passed to the parser
-		Error_Parser_UndefinedToken				= 7,	// token has undefined type
-		Error_Parser_EmptyToken					= 8,	// token has no content
-		Error_Parser_InvalidRoot				= 9,	// text root must be a lone value, an unnamed object, or an unnamed array
-		Error_Parser_IllegalTokenAtStart		= 10,	// incorrect structural character at start
-		Error_Parser_IllegalClosingToken		= 11,	// incorrect token at end of container
-		Error_Parser_ExpectedTokenAfterValue	= 12,	// expected additional tokens following string
-		Error_Parser_NamedValueInArray			= 13,	// key-value pair inside array
-		Error_Parser_LoneValue					= 14,	// unnamed value not allowed outside arrays
-		Error_Parser_InvalidKeyValuePair		= 15,	// invalid name or value
-		Error_Parser_MissingSeparator			= 16	// expected comma before token
+		Error_Lexer_InvalidEncoding				= 101,	// unsupported character encoding
+		Error_Lexer_IllegalToken				= 102,	// disallowed ASCII in structural text
+		Error_Lexer_IllegalTokenMultiByte		= 103,	// multi-byte character in structural text
+		Error_Lexer_IncompleteUnicodeInString	= 104,	// incomplete or corrupted multi-byte codepoint
+		Error_Parser_NoTokens					= 201,	// lexer succeeded, but no tokens were passed to the parser
+		Error_Parser_UndefinedToken				= 202,	// token has undefined type
+		Error_Parser_EmptyToken					= 203,	// token has no content
+		Error_Parser_InvalidRoot				= 204,	// text root must be a lone value, an unnamed object, or an unnamed array
+		Error_Parser_IllegalTokenAtStart		= 205,	// incorrect structural character at start
+		Error_Parser_IllegalClosingToken		= 206,	// incorrect token at end of container
+		Error_Parser_ExpectedTokenAfterValue	= 207,	// expected additional tokens following string
+		Error_Parser_NamedValueInArray			= 208,	// key-value pair inside array
+		Error_Parser_LoneValue					= 209,	// unnamed value not allowed outside arrays
+		Error_Parser_InvalidKeyValuePair		= 210,	// invalid name or value
+		Error_Parser_MissingSeparator			= 211,	// expected comma before token
+		Error_File								= 301,	// failure to read file
 	};
 	#define RETURN_ERROR(err) return JSON::Result::err
 	#define RETURN_ERROR_IF(condition, err) if (condition) { RETURN_ERROR(err); }
@@ -142,7 +162,6 @@ namespace
 	bool openFile(str_view filePath, std::ifstream& fileStreamOut, size_t& fileSizeOut);
 
 	str_view tokenTypeToString(TokenType t);
-	StructuralTokenType tokenToStructuralType(const Token& token);
 	JSON::ObjectType valueTokenToObjType(const Token& token);
 
 

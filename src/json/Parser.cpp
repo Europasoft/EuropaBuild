@@ -7,6 +7,10 @@
 #include <cassert>
 #include <iomanip>
 #include <stack>
+#include <exception>
+#include <algorithm>
+#include <utility>
+
 
 namespace JSONTextUtils
 {
@@ -237,24 +241,41 @@ namespace JSON
 		for (auto& token : tokens) { std::cout << "  " << token.data << "=" << tokenTypeToString(token.type); }
 	}
 
-	bool Object::isNamed() const
+	bool Object::isNamed() const noexcept
 	{
 		return !name.empty();
 	}
 
-	bool Object::isValue() const
+	str_view Object::getName() const noexcept
+	{
+		return str_view(name);
+	}
+
+	bool Object::isValue() const noexcept
 	{
 		return !isContainer() && type != JSON::ObjectType::Undefined;
 	}
 
-	bool Object::isContainer() const
+	bool Object::isContainer() const noexcept
 	{
 		return type == JSON::ObjectType::Array || type == JSON::ObjectType::Object;
 	}
 
-	str_view Object::getValue() const
+	bool Object::isArray() const noexcept
+	{
+		return type == JSON::ObjectType::Array;
+	}
+
+	
+
+	str_view Object::getValue() const noexcept
 	{
 		return value;
+	}
+
+	ObjectType Object::getType() const noexcept
+	{
+		return type;
 	}
 
 	size_t Object::size() const noexcept
@@ -279,11 +300,91 @@ namespace JSON
 		name = value = str_t();
 	}
 
-	str_t Object::toString(bool readable) const
+	str_t Object::toString(bool readable) const noexcept
 	{
 		if (subobjects.empty()) { return str_t(); }
 		size_t recursionDepth = -1;
-		return subobjects[0].getSubobjectsAsStringInternal(recursionDepth, readable);
+		return subobjects[0]->getSubobjectsAsStringInternal(recursionDepth, readable);
+	}
+
+	Object& Object::operator[](size_t i)
+	{
+		return *subobjects[i].get();
+	}
+	const Object& Object::operator[](size_t i) const
+	{
+		return *subobjects[i].get();
+	}
+
+	SubobjectIterator Object::getNamedSubobjectIteratorInternal(str_view name) const noexcept
+	{
+		SubobjectIterator it = std::find_if(subobjects.begin(), subobjects.end(),
+			[name](const JSON::ObjectPtr& obj)
+			{
+				return obj->name == name;
+			});
+		return it;
+	}
+
+	void Object::push_back(ObjectPtr subobject)
+	{
+		subobjects.push_back(subobject);
+	}
+	
+	bool Object::hasNamedSubobject(str_view name) const noexcept
+	{
+		const SubobjectIterator it = getNamedSubobjectIteratorInternal(name);
+		return (it != subobjects.end());
+	}
+
+	const ObjectPtr Object::getNamedSubobject(str_view name) const noexcept
+	{
+		const SubobjectIterator it = getNamedSubobjectIteratorInternal(name);
+		return (it != subobjects.end()) ? *it : ObjectPtr(nullptr);
+	}
+
+	ObjectPtr Object::getNamedSubobject(str_view name) noexcept
+	{
+		SubobjectIterator it = getNamedSubobjectIteratorInternal(name);
+		return (it != subobjects.end()) ? *it : ObjectPtr(nullptr);
+	}
+
+	const Object& Object::operator[](str_view name) const
+	{
+		return *getNamedSubobject(name);
+	}
+
+	Object& Object::operator[](str_view name)
+	{
+		return *getNamedSubobject(name);
+	}
+
+	std::vector<std::string> Object::vector() const
+	{
+		std::vector<std::string> vec;
+		for (const ObjectPtr& sub : subobjects)
+		{
+			if (sub->isContainer() or sub->isNamed())
+			{
+				vec.push_back(sub->toString(true));
+			}
+			else if (sub->size() > 0)
+			{
+				vec.push_back(std::string(sub->getValue()));
+			}
+		}
+		return vec;
+	}
+
+	std::map<std::string, ObjectPtr> Object::map() const
+	{
+		std::map<str_t, ObjectPtr> outMap;
+		for (const ObjectPtr& sub : subobjects)
+		{
+			if (sub->isNamed())
+				outMap[str_t(sub->getName())] = sub;
+		}
+		return outMap;
 	}
 
     str_t Object::getSubobjectsAsStringInternal(size_t& depth, bool readable) const
@@ -304,7 +405,7 @@ namespace JSON
 
 		for (size_t i = 0; i < subobjects.size(); i++)
 		{
-			s += indent + subobjects[i].getSubobjectsAsStringInternal(depth, readable);
+			s += indent + subobjects[i]->getSubobjectsAsStringInternal(depth, readable);
 			if (i < subobjects.size()-1) s += ",";
 		}
 
@@ -328,7 +429,7 @@ namespace JSON
 		depth--;
         return s;
     }
-	
+
 }
 
 namespace
@@ -480,7 +581,7 @@ namespace
 			const JSON::ObjectType valueType = valueTokenToObjType(tokens[i]);
 			const StructuralTokenType strucType = structuralTokenToObjType(tokens[i]);
 			const bool isArrayToken = (strucType == StructuralTokenType::ArrayBegin || strucType == StructuralTokenType::ArrayEnd);
-			const bool isInArray = objects.top().type == JSON::ObjectType::Array;
+			const bool isInArray = objects.top().isArray();
 
 			if (strucType != StructuralTokenType::NotStructural)
 			{
@@ -505,9 +606,9 @@ namespace
 				{
 					// end container
 					JSON::Object top = objects.top();
-					RETURN_ERROR_IF((top.type == JSON::ObjectType::Array) != isArrayToken, Error_Parser_IllegalClosingToken); // fail: incorrect token at end of container
+					RETURN_ERROR_IF((top.isArray()) != isArrayToken, Error_Parser_IllegalClosingToken); // fail: incorrect token at end of container
 					objects.pop();
-					objects.top().subobjects.push_back(top);
+					objects.top().push_back(std::make_shared<JSON::Object>(top));
 				}
 				else if (strucType == StructuralTokenType::KeyValueDelim)
 				{
@@ -541,9 +642,9 @@ namespace
 					i++; // skip the ":"
 					continue;
 				}
-				else if (name.empty() && objects.top().type != JSON::ObjectType::Array) { RETURN_ERROR(Error_Parser_LoneValue); } // fail: unnamed value not allowed outside arrays
+				else if (name.empty() && (not objects.top().isArray())) { RETURN_ERROR(Error_Parser_LoneValue); } // fail: unnamed value not allowed outside arrays
 
-				objects.top().subobjects.push_back(JSON::Object(valueType, name, data));
+				objects.top().push_back(std::make_shared<JSON::Object>(valueType, name, data));
 				name = str_view(); // clear name
 			}
 
