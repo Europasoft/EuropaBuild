@@ -1,6 +1,6 @@
 
 #pragma once
-#include <config_types.hpp>
+#include <EuropaBuild/config_types.hpp>
 
 namespace EuropaBuild
 {

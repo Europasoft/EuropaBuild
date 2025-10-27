@@ -11,9 +11,9 @@
 #include <string>
 #include <vector>
 
-#include "mpp/mir/meson/arguments.hpp"
-#include "mpp/mir/meson/toolchains/common.hpp"
-#include "mpp/mir/meson/machines.hpp"
+#include "mir/meson/arguments.hpp"
+#include "mir/meson/toolchains/common.hpp"
+#include "mir/meson/machines.hpp"
 
 namespace MIR::Toolchain::Compiler {
 

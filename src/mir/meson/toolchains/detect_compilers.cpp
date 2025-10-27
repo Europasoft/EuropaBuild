@@ -17,7 +17,7 @@
 
 #include "compiler.hpp"
 #include "compilers/cpp/cpp.hpp"
-#include "mpp/util/process.hpp"
+#include "util/process.hpp"
 
 namespace MIR::Toolchain::Compiler {
 
