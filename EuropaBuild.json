@@ -1,0 +1,58 @@
+[
+	{
+		"target": "EuropaBuildSelf",
+		"type": "executable",
+		"output path": "build/",
+		"sources":
+		[
+			"src/EuropaBuild/"
+		],
+		"include paths":
+		[
+			"src/",
+			"src/EuropaBuild/"
+		],
+		"dependencies":
+		[
+			"MesonPlusPlus",
+			"EuropasoftJSON"
+		]
+	},
+
+	{
+		"target": "EuropasoftJSON",
+		"type": "dependency",
+		"output path": "build/",
+		"sources":
+		[
+			"src/json/"
+		],
+		"include paths":
+		[
+		],
+		"dependencies":
+		[
+		]
+	},
+
+	{
+		"target": "MesonPlusPlus",
+		"type": "dependency",
+		"output path": "build/",
+		"sources": 
+		[
+			"src/mir",
+			"src/util"
+		],
+		"include paths": 
+		[
+			"src/",
+			"src/mir",
+			"src/mir/meson",
+			"src/util"
+		],
+		"dependencies":
+		[
+		]
+	}
+]
