@@ -77,6 +77,7 @@ std::string Info::system() const {
             return "linux";
         default:
             assert(false);
+			return "";
     }
 }
 
@@ -90,6 +91,7 @@ std::string to_string(const Machine m) {
             return "target";
     }
     assert(false); // unreachable
+	return "";
 }
 
 std::string to_string(const Endian e) {
@@ -100,6 +102,7 @@ std::string to_string(const Endian e) {
             return "little";
     }
     assert(false); // unreachable
+	return "";
 }
 
 std::string to_string(const Kernel k) {
@@ -108,6 +111,7 @@ std::string to_string(const Kernel k) {
             return "linux";
     }
     assert(false); // unreachable
+	return "";
 }
 
 } // namespace MIR::Machines

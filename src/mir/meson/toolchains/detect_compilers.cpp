@@ -52,6 +52,7 @@ std::unique_ptr<Compiler> detect_compiler(const Language & lang, const Machines:
             return detect_cpp_compiler(machine, bins.empty() ? DEFAULT_CPP : bins);
     }
     assert(false);
+	return nullptr;
 };
 
 } // namespace MIR::Toolchain::Compiler

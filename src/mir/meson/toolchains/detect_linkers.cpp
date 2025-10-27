@@ -37,6 +37,7 @@ std::unique_ptr<Linker> detect_linker_gcc(const std::unique_ptr<Compiler::Compil
         return std::make_unique<Drivers::Gnu>(linker, comp.get());
     }
     assert(false);
+	return nullptr;
 };
 
 } // namespace
@@ -47,6 +48,7 @@ std::unique_ptr<Linker> detect_linker(const std::unique_ptr<Compiler::Compiler> 
         return detect_linker_gcc(comp, machine);
     }
     assert(false);
+	return nullptr;
 };
 
 } // namespace MIR::Toolchain::Linker
