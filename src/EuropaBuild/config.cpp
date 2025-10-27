@@ -302,13 +302,20 @@ namespace EuropaBuild
 			{
 				return !std::isspace(ch);
 			}).base(), s.end());
+		
+		std::replace(s.begin(), s.end(), '\\', '/');
+		return fs::path(s);
+	}
+
+	std::string ConfigUtils::lowercase(std::string_view sv)
+	{
+		std::string s(sv);
 		std::transform(s.begin(), s.end(), s.begin(),
 			[](unsigned char c)
 			{
 				return std::tolower(c);
 			});
-		std::replace(s.begin(), s.end(), '\\', '/');
-		return fs::path(s);
+		return s;
 	}
 
 } // namespace EuropaBuild

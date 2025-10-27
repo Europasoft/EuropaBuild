@@ -19,7 +19,7 @@ namespace EuropaBuild
         : _config(config)
     {
 		log.log("EuropaBuild C++\n", ESLogVerbosity::Warning, ESLog::CYAN);
-		log.log("Dependency graph: \n" + _config->tree->getWholeDependecyTreeAsString(), ESLogVerbosity::Verbose, ESLog::BLUE);
+		log.log("Dependency graph \n" + _config->tree->getWholeDependecyTreeAsString(), ESLogVerbosity::Verbose, ESLog::BLUE);
 	}
 
     std::unique_ptr<MPP::Compiler> detectCompiler()
@@ -96,12 +96,22 @@ namespace EuropaBuild
 		return fs::path(str);
 	}
 
-    std::string sourceFilePathToObjFilenameString(const fs::path& objOutDir, const fs::path& sourcePath)
+    std::string sourceFilePathToObjFilenameString(const fs::path& objOutDir, const fs::path& sourcePath, std::string suffix)
     {
 		fs::path outPath = escapeSpacesForNinja(sourcePath);
-		outPath = fs::path(outPath.stem().string() + ".o"); // add .o file extension, remove directory
+		outPath = fs::path(outPath.stem().string() + suffix + ".o"); // add .o file extension, remove directory
 		return (objOutDir / outPath).string(); // the new path is where the generated object file goes
     }
+
+	std::string includePathArgs(const TargetMapping& mapping)
+	{
+		std::string inArgs;
+		for (const fs::path& in : mapping.target->includePaths)
+		{
+			inArgs += " \"-I" + in.string() + "\"";
+		}
+		return inArgs;
+	}
 
     void generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, MPP::Compiler* compiler)
     {
@@ -118,17 +128,19 @@ namespace EuropaBuild
         writeArchiverRule(out, compiler);
         out << std::endl;
 
+		size_t sourceFileCounter = 0;
         std::map<std::string, std::vector<std::string>> depObjectFiles;
         for (const TargetMapping& mapping : *mappings)
         {
             const auto& target = *mapping.target;
-            std::vector<std::string> object_files;
-            for (const auto& source_file : mapping.sourceFiles)
+            std::vector<std::string> objectFiles;
+            for (const fs::path& sourceFilePath : mapping.sourceFiles)
             {
-				std::string obj_file = sourceFilePathToObjFilenameString(fs::path(INTERMEDIATE_DIR), fs::path(source_file));
-                object_files.push_back(obj_file);
-				out << "build " << obj_file << ": cpp_compile " << escapeSpacesForNinja(fs::path(source_file)).string() << std::endl;
-                out << "  ARGS =";
+				std::string objFile = sourceFilePathToObjFilenameString(fs::path(INTERMEDIATE_DIR), fs::path(sourceFilePath), std::to_string(sourceFileCounter));
+				sourceFileCounter++;
+				objectFiles.push_back(objFile);
+				out << "build " << objFile << ": cpp_compile " << escapeSpacesForNinja(fs::path(sourceFilePath)).string() << std::endl;
+                out << "  ARGS =" << includePathArgs(mapping) << " -std=c++20";
                 out << std::endl << std::endl;
             }
 
@@ -136,7 +148,7 @@ namespace EuropaBuild
             {
                 // all targets should be in order at this point, 
                 // so if a later target depends on this one it will be able to find these object files to link against
-                depObjectFiles[target.name] = object_files;
+                depObjectFiles[target.name] = objectFiles;
             }
             else if (target.targetType == ETargetType::Executable or target.targetType == ETargetType::StaticLib)
             {
@@ -146,7 +158,7 @@ namespace EuropaBuild
                 else
                     out << "build " << target.name << ": cpp_archive";
 
-                for (const auto& obj : object_files)
+                for (const std::string& obj : objectFiles)
                     out << " " << obj;
 
                 // also link against object files from dependency-targets built before this one

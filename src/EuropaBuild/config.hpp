@@ -71,6 +71,7 @@ namespace EuropaBuild
 		static ETargetType targetTypeFromString(std::string_view str);
 		static std::vector<fs::path> vectorStringsToPaths(std::vector<std::string> strs);
 		static fs::path sanitizeStringToPath(std::string_view sv);
+		static std::string lowercase(std::string_view sv);
 	};
 
 	
