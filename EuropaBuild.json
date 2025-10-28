@@ -22,7 +22,7 @@
 	{
 		"target": "EuropasoftJSON",
 		"type": "dependency",
-		"output path": "/",
+		"output path": "",
 		"sources":
 		[
 			"src/json/"
@@ -38,17 +38,14 @@
 	{
 		"target": "MesonPlusPlus",
 		"type": "dependency",
-		"output path": "/",
+		"output path": "",
 		"sources": 
 		[
-			"src/mir",
 			"src/util"
 		],
 		"include paths": 
 		[
 			"src/",
-			"src/mir",
-			"src/mir/meson",
 			"src/util"
 		],
 		"dependencies":

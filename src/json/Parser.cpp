@@ -576,7 +576,7 @@ namespace
 
 			if (i > 0) { lastToken = &tokens[i-1]; }
 			RETURN_ERROR_IF(type == TokenType::Undefined, Error_Parser_UndefinedToken); // fail: token with undefined type passed to parser
-			RETURN_ERROR_IF(data.empty(), Error_Parser_EmptyToken); // fail: empty token passed to parser
+			RETURN_ERROR_IF(data.empty() and type != TokenType::String, Error_Parser_EmptyToken); // fail: empty token passed to parser
 
 			const JSON::ObjectType valueType = valueTokenToObjType(tokens[i]);
 			const StructuralTokenType strucType = structuralTokenToObjType(tokens[i]);
