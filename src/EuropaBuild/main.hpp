@@ -13,6 +13,12 @@
 #include <memory>
 #include "config.hpp"
 
+namespace EuropaBuild::FindTool
+{
+	class Compiler;
+	class Toolchain;
+}
+
 namespace EuropaBuild 
 {
 	namespace fs = std::filesystem;
@@ -45,11 +51,11 @@ namespace EuropaBuild
 
 		static std::unique_ptr<MPP::Compiler> detectCompiler();
 
-		static void writeCompilerRule(std::ofstream& out, MPP::Compiler* compiler);
+		static void writeCompilerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
 
-		static void writeLinkerRule(std::ofstream& out, MPP::Compiler* compiler);
+		static void writeLinkerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
 
-		static void writeArchiverRule(std::ofstream& out, MPP::Compiler* compiler);
+		static void writeArchiverRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
 
 		static fs::path escapeSpacesForNinja(const fs::path& p);
 
@@ -57,9 +63,18 @@ namespace EuropaBuild
 
 		static std::string includePathArgs(const TargetMapping& mapping);
 
-		static void generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, MPP::Compiler* compiler);
+		static std::string makeTargetFullOutputPath(const Target& target);
+
+		static void generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, 
+							std::shared_ptr<FindTool::Toolchain> toolchain);
 
 	};
 
+	static constexpr bool WinOS =
+#if defined(_WIN32) || defined(_WIN64)
+		true;
+#else
+		false;
+#endif
 
 } // namespace EuropaBuild

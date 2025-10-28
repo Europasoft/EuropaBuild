@@ -54,14 +54,6 @@ namespace EuropaBuild
 
 namespace EuropaBuild
 {
-
-	/*static constexpr bool WindowsOS =
-	#if defined(_WIN32) || defined(_WIN64)
-	true;
-	#else
-	false;
-	#endif*/
-
 	class ConfigUtils
 	{
 	public:

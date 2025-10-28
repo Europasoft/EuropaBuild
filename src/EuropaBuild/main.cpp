@@ -1,6 +1,7 @@
 #include "EuropaBuild/main.hpp"
 #include "EuropaBuild/config.hpp"
 #include "EuropaBuild/mpp.hpp"
+#include "EuropaBuild/findtool.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -24,13 +25,16 @@ namespace EuropaBuild
 
 	int BuildTool::build()
 	{
+		using namespace FindTool;
 		try
 		{
-			// pick a compiler
-			auto compiler = detectCompiler();
-			if (not compiler)
+			// pick a compiler and archiver
+			std::shared_ptr<Toolchain> toolchain = Toolchain::selectToolchain();
+			if (not toolchain->compiler)
+			{
 				throw EnvironmentException("No suitable C++ compiler found");
-			log.log("Using compiler " + compiler->id() + "\n");
+			}
+			log.log("Using compiler " + toolchain->compiler->name + "\n");
 
 			log.log("Generating " + std::to_string(_config->tree->size()) + " targets");
 
@@ -54,7 +58,7 @@ namespace EuropaBuild
 			log.log("Found " + std::to_string(totalSourceFiles) + " sources");
 
 			// generate ninja build file
-			generateNinjaBuild(*_config, targetMappings, compiler.get());
+			generateNinjaBuild(*_config, targetMappings, toolchain);
 
 			createRelativeDirectory(fs::current_path() / _config->intermediateDir);
 
@@ -110,7 +114,7 @@ namespace EuropaBuild
 		return source_files;
 	}
 
-	void BuildTool::generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, MPP::Compiler* compiler)
+	void BuildTool::generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, std::shared_ptr<FindTool::Toolchain> toolchain)
 	{
 		std::ofstream out(fs::current_path() / "build.ninja");
 
@@ -120,19 +124,20 @@ namespace EuropaBuild
 			<< "ninja_required_version = 1.8.2" << std::endl
 			<< std::endl;
 
-		writeCompilerRule(out, compiler);
-		writeLinkerRule(out, compiler);
-		writeArchiverRule(out, compiler);
+		writeCompilerRule(out, toolchain);
+		writeLinkerRule(out, toolchain);
+		writeArchiverRule(out, toolchain);
 		out << std::endl;
 
 		size_t sourceFileCounter = 0;
 		std::map<std::string, std::vector<std::string>> depObjectFiles;
 		for (const TargetMapping& mapping : *mappings)
 		{
-			const auto& target = *mapping.target;
+			const Target& target = *mapping.target;
 			std::vector<std::string> objectFiles;
 			for (const fs::path& sourceFilePath : mapping.sourceFiles)
 			{
+				// source file compile command
 				std::string objFile = sourceFilePathToObjFilenameString(fs::path(INTERMEDIATE_DIR), fs::path(sourceFilePath), std::to_string(sourceFileCounter));
 				sourceFileCounter++;
 				objectFiles.push_back(objFile);
@@ -152,17 +157,24 @@ namespace EuropaBuild
 				// so if a later target depends on this one it will be able to find these object files to link against
 				depObjectFiles[target.name] = objectFiles;
 			}
+
 			if (isExecutable or isStaticLib or isDynamicLib)
 			{
 				// executables and libraries (archives) need to actually be linked, not just compiled
+				const std::string targetOutputPath = makeTargetFullOutputPath(target);
 				if (target.targetType == ETargetType::Executable)
-					out << "build " << target.name << ": cpp_link";
+				{
+					out << "build " << targetOutputPath << ": cpp_link";
+				}
 				else
-					out << "build " << target.name << ": cpp_archive";
+				{
+					out << "build " << targetOutputPath << ": cpp_archive";
+				}
 
 				for (const std::string& obj : objectFiles)
+				{
 					out << " " << obj;
-
+				}
 				// also link against object files from dependency-targets built before this one
 				// the other target that is the dependency must be marked as such in the dependencies list for this target
 				if (target.depends.size() > 0)
@@ -170,10 +182,13 @@ namespace EuropaBuild
 					for (const auto& depName : target.depends)
 					{
 						if (depObjectFiles.find(depName) == depObjectFiles.end())
+						{
 							throw DependencyException("Target " + target.name + " is set to depend on " + depName + " but the latter could not be found");
-
+						}
 						for (const auto& obj : depObjectFiles[depName])
+						{
 							out << " " << obj;
+						}
 					}
 				}
 				out << std::endl << std::endl;
@@ -186,52 +201,39 @@ namespace EuropaBuild
 		}
 
 		// targets that no others depend on are "defaults" (final products)
-		const auto& products = _config.tree->targetsThatAreFinalProducts;
+		const Targets& products = _config.tree->targetsThatAreFinalProducts;
 		if (products.size() < 1)
 			throw DependencyException("Could not determine any default target because all targets are used as dependencies");
 
 		out << "default ";
-		for (const std::string& d : products)
-			out << d << " ";
+		for (const std::shared_ptr<const Target>& p : products)
+			out << makeTargetFullOutputPath(*p) << " ";
 		out << std::endl;
 	}
 
-	void BuildTool::writeCompilerRule(std::ofstream& out, MPP::Compiler* compiler)
+	void BuildTool::writeCompilerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain)
 	{
 		out << "rule cpp_compile" << std::endl << "  command =";
+		out << " " << toolchain->compiler->command;
 
-		for (const auto& cmd : compiler->command)
-		{
-			out << " " << cmd;
-		}
-
-		// add compile-only and output commands
-		auto compile_cmd = compiler->compile_only_command();
-		for (const auto& arg : compile_cmd)
-		{
-			out << " " << arg;
-		}
+		out << " " << toolchain->compiler->compileFlag;
 
 		out << " ${ARGS} -o ${out} ${in}" << std::endl
 			<< "  description = Compiling C++ object ${out}" << std::endl
 			<< std::endl;
 	}
 
-	void BuildTool::writeLinkerRule(std::ofstream& out, MPP::Compiler* compiler)
+	void BuildTool::writeLinkerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain)
 	{
 		out << "rule cpp_link" << std::endl << "  command =";
-
-		for (const auto& cmd : compiler->command)
-		{
-			out << " " << cmd;
-		}
+		out << " " << toolchain->compiler->command;
 
 		out << " ${ARGS} -o ${out} ${in}" << std::endl
 			<< "  description = Linking executable ${out}" << std::endl
 			<< std::endl;
 	}
 
-	void BuildTool::writeArchiverRule(std::ofstream& out, MPP::Compiler* compiler)
+	void BuildTool::writeArchiverRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain)
 	{
 		out << "rule cpp_archive" << std::endl
 			<< "  command = ar rcs ${out} ${in}" << std::endl
@@ -244,6 +246,19 @@ namespace EuropaBuild
 		fs::path outPath = escapeSpacesForNinja(sourcePath);
 		outPath = fs::path(outPath.stem().string() + suffix + ".o"); // add .o file extension, remove directory
 		return (objOutDir / outPath).string(); // the new path is where the generated object file goes
+	}
+
+	std::string BuildTool::makeTargetFullOutputPath(const Target& target)
+	{
+		std::string ext;
+		if (target.targetType == ETargetType::Executable)
+			ext = WinOS ? ".exe" : ".bin";
+		if (target.targetType == ETargetType::StaticLib)
+			ext = WinOS ? ".lib" : ".a";
+		if (target.targetType == ETargetType::DynamicLib)
+			ext = WinOS ? ".dll" : ".so";
+
+		return escapeSpacesForNinja(target.outputPath / fs::path(target.name + ext)).string();
 	}
 
 	int8_t BuildTool::runNinja()
