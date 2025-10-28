@@ -1,8 +1,6 @@
 
 #pragma once
 #include <EuropaBuild/config_types.hpp>
-#include "EuropaBuild/mpp.hpp"
-//#include "mpp_fdecl.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -32,14 +30,14 @@ namespace EuropaBuild
 	class BuildTool
 	{
 	public:
-		BuildTool(std::shared_ptr<const BuildConfig2> config);
+		BuildTool(std::shared_ptr<const BuildConfig> config);
 		
 		int build();
 
 		ESLogVerbosity getLogVerbosity() const;
 	
 	private:
-		std::shared_ptr<const BuildConfig2> _config;
+		std::shared_ptr<const BuildConfig> _config;
 
 		ESLog log;
 	
@@ -48,8 +46,6 @@ namespace EuropaBuild
 		int8_t runNinja();
 
 		static void createRelativeDirectory(const fs::path& path);
-
-		static std::unique_ptr<MPP::Compiler> detectCompiler();
 
 		static void writeCompilerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
 
@@ -65,7 +61,7 @@ namespace EuropaBuild
 
 		static std::string makeTargetFullOutputPath(const Target& target);
 
-		static void generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, 
+		static void generateNinjaBuild(const BuildConfig& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, 
 							std::shared_ptr<FindTool::Toolchain> toolchain);
 
 	};

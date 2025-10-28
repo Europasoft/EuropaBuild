@@ -1,7 +1,7 @@
 #include "EuropaBuild/main.hpp"
 #include "EuropaBuild/config.hpp"
-#include "EuropaBuild/mpp.hpp"
 #include "EuropaBuild/findtool.hpp"
+#include "util/process.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -16,7 +16,7 @@ namespace fs = std::filesystem;
 
 namespace EuropaBuild
 {
-    BuildTool::BuildTool(std::shared_ptr<const BuildConfig2> config)
+    BuildTool::BuildTool(std::shared_ptr<const BuildConfig> config)
         : _config(config)
     {
 		log.log("EuropaBuild C++\n", ESLogVerbosity::Warning, ESLog::CYAN);
@@ -73,22 +73,6 @@ namespace EuropaBuild
 		}
 	}
 
-    std::unique_ptr<MPP::Compiler> BuildTool::detectCompiler()
-    {
-        const std::vector<std::string> compilers = { "g++", "clang++", "c++" };
-
-        for (const auto& compiler_name : compilers)
-        {
-            auto compiler = MPP::detect_compiler(MPP::ELanguage::CPP, MPP::EMachine::BUILD, { compiler_name });
-            if (compiler)
-            {
-                return compiler;
-            }
-        }
-
-        return nullptr;
-    }
-
 	std::vector<fs::path> BuildTool::discoverSourceFiles(const std::vector<fs::path>& paths)
 	{
 		std::vector<fs::path> source_files;
@@ -114,7 +98,7 @@ namespace EuropaBuild
 		return source_files;
 	}
 
-	void BuildTool::generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, std::shared_ptr<FindTool::Toolchain> toolchain)
+	void BuildTool::generateNinjaBuild(const BuildConfig& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, std::shared_ptr<FindTool::Toolchain> toolchain)
 	{
 		std::ofstream out(fs::current_path() / "build.ninja");
 
@@ -264,7 +248,7 @@ namespace EuropaBuild
 	int8_t BuildTool::runNinja()
 	{
 		std::cout << "Running Ninja" << std::endl;
-		auto const& [ret, out, err] = MPP::process(std::vector<std::string>{ "ninja" });
+		auto const& [ret, out, err] = Util::process(std::vector<std::string>{ "ninja" });
 		if (ret != 0)
 		{
 			std::cerr << ESLog::colorMessage("Command failed (code " + std::to_string(ret) + ")\n" + err + "\n", ESLog::BRIGHT_RED);
@@ -318,7 +302,7 @@ int main(int argc, char* argv[])
     try
     {
         fs::path configFilePath = fs::current_path() / "EuropaBuild.json";
-        std::shared_ptr<EuropaBuild::BuildConfig2> config = std::make_shared<EuropaBuild::BuildConfig2>();
+        std::shared_ptr<EuropaBuild::BuildConfig> config = std::make_shared<EuropaBuild::BuildConfig>();
         config->intermediateDir = EuropaBuild::INTERMEDIATE_DIR;
         if (argc <= 1)
             config = EuropaBuild::ConfigUtils::parseConfigFromJson(configFilePath);

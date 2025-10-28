@@ -24,7 +24,7 @@ namespace EuropaBuild
 		return config;
 	}*/
 
-	std::shared_ptr<BuildConfig2> ConfigUtils::parseConfigFromJson(const std::filesystem::path& fullPath)
+	std::shared_ptr<BuildConfig> ConfigUtils::parseConfigFromJson(const std::filesystem::path& fullPath)
 	{
 		using namespace JSON;
 		
@@ -65,7 +65,7 @@ namespace EuropaBuild
 			targets.push_back(targetPtr);
 		}
 
-		std::shared_ptr<BuildConfig2> config = std::make_shared<BuildConfig2>();
+		std::shared_ptr<BuildConfig> config = std::make_shared<BuildConfig>();
 		config->tree = std::make_unique<BuildTree>(targets); // this performs dependency analysis to sort the targets
 
 		return config;

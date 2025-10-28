@@ -31,19 +31,6 @@ namespace EuropaBuild
 		using std::runtime_error::runtime_error;
 	};
 
-	/*class BuildConfig
-	{
-	public:
-		fs::path source_dir;
-		fs::path build_dir;
-		std::string output_name;
-		std::string build_type; // "exe" or "lib"
-		std::vector<std::string> cpp_args;
-		bool verbose = false;
-
-		static BuildConfig configDefault();
-	};*/
-
 	enum class ETargetType : uint32_t
 	{
 		Unknown = 0,
@@ -91,7 +78,7 @@ namespace EuropaBuild
 
 	static inline constexpr auto INTERMEDIATE_DIR = "Intermediate";
 
-	class BuildConfig2
+	class BuildConfig
 	{
 	public:
 		std::unique_ptr<BuildTree> tree = nullptr;

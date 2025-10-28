@@ -57,7 +57,7 @@ namespace EuropaBuild
 	class ConfigUtils
 	{
 	public:
-		static std::shared_ptr<BuildConfig2> parseConfigFromJson(const std::filesystem::path& fullPath);
+		static std::shared_ptr<BuildConfig> parseConfigFromJson(const std::filesystem::path& fullPath);
 		//static BuildConfig parseConfigFromCommands(int argc, char* argv[]);
 		static void targetSanityCheck(const JSON::ObjectPtr& targetJson);
 		static ETargetType targetTypeFromString(std::string_view str);
