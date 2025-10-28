@@ -9,8 +9,12 @@ VS/
 *.userosscache
 *.sln.docstates
 
+[Ii]ntermediate/
+build.ninja
+.ninja_log
 [Bb]in/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
 /test_project
+

@@ -231,7 +231,7 @@ namespace EuropaBuild
 		{
 			auto it = std::find(allDependencies.begin(), allDependencies.end(), target->name);
 			if (it == allDependencies.end())
-				targetsThatAreFinalProducts.push_back(target->name);
+				targetsThatAreFinalProducts.push_back(target);
 		}
 	}
 

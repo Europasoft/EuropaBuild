@@ -78,7 +78,7 @@ namespace EuropaBuild
 	{
 		Targets targetsOrdered;
 	public:
-		std::vector<std::string> targetsThatAreFinalProducts;
+		Targets targetsThatAreFinalProducts;
 		BuildTree(const Targets& targets);
 
 		Targets::const_iterator begin() const;
@@ -89,7 +89,7 @@ namespace EuropaBuild
 		std::string getDependecyTreeForTarget(const Target& t, size_t& iterationDepth) const;
 	};
 
-	static inline constexpr auto INTERMEDIATE_DIR = "intermediate";
+	static inline constexpr auto INTERMEDIATE_DIR = "Intermediate";
 
 	class BuildConfig2
 	{
