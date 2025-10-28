@@ -2,7 +2,7 @@
 	{
 		"target": "EuropaBuildSelf",
 		"type": "executable",
-		"output path": "build/",
+		"output path": "SelfBuild/",
 		"sources":
 		[
 			"src/EuropaBuild/"
@@ -22,7 +22,7 @@
 	{
 		"target": "EuropasoftJSON",
 		"type": "dependency",
-		"output path": "build/",
+		"output path": "/",
 		"sources":
 		[
 			"src/json/"
@@ -38,7 +38,7 @@
 	{
 		"target": "MesonPlusPlus",
 		"type": "dependency",
-		"output path": "build/",
+		"output path": "/",
 		"sources": 
 		[
 			"src/mir",
