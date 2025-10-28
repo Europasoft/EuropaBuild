@@ -1,6 +1,7 @@
 
 #pragma once
 #include <EuropaBuild/config_types.hpp>
+#include "EuropaBuild/mpp.hpp"
 //#include "mpp_fdecl.hpp"
 
 #include <filesystem>
@@ -37,22 +38,27 @@ namespace EuropaBuild
 		ESLog log;
 	
 		std::vector<fs::path> discoverSourceFiles(const std::vector<fs::path>& paths);
-	
-		//std::unique_ptr<MPP::Compiler> detectCompiler();
-	
-		//void generateNinjaBuild(std::shared_ptr<std::vector<TargetMapping>> mappings, MPP::Compiler* compiler);
-	
-		//void writeCompilerRule(std::ofstream& out, MPP::Compiler* compiler);
-	
-		//void writeLinkerRule(std::ofstream & out, MPP::Compiler * compiler);
-	
-		//void writeArchiverRule(std::ofstream& out, MPP::Compiler* compiler);
-
-		//std::string sourceFilePathToString(const fs::path& path);
 
 		int8_t runNinja();
 
 		static void createRelativeDirectory(const fs::path& path);
+
+		static std::unique_ptr<MPP::Compiler> detectCompiler();
+
+		static void writeCompilerRule(std::ofstream& out, MPP::Compiler* compiler);
+
+		static void writeLinkerRule(std::ofstream& out, MPP::Compiler* compiler);
+
+		static void writeArchiverRule(std::ofstream& out, MPP::Compiler* compiler);
+
+		static fs::path escapeSpacesForNinja(const fs::path& p);
+
+		static std::string sourceFilePathToObjFilenameString(const fs::path& objOutDir, const fs::path& sourcePath, std::string suffix);
+
+		static std::string includePathArgs(const TargetMapping& mapping);
+
+		static void generateNinjaBuild(const BuildConfig2& _config, std::shared_ptr<std::vector<TargetMapping>> mappings, MPP::Compiler* compiler);
+
 	};
 
 
