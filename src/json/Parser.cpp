@@ -658,12 +658,132 @@ namespace JSON::Internals
 
 namespace XMLTextUtils
 {
+	bool isStructuralChar(char_t c)
+	{
+		return c == STC_CHEVRON_L || c == STC_CHEVRON_R || c == STC_SLASH ||
+			c == STC_EQUALS || c == STC_QUESTION || c == STC_EXCLAMATION;
+	}
 
+	bool isWhitespaceChar(char_t c)
+	{
+		return JSONTextUtils::isWhitespaceChar(c);
+	}
 }
 
 namespace XML
 {
 	using namespace XML::Internals;
+
+	void Node::reset()
+	{
+		type = NodeType::Undefined;
+		name.clear();
+		value.clear();
+		attributes.clear();
+		children.clear();
+	}
+
+	NodeType Node::getType() const noexcept { return type; }
+	str_view Node::getName() const noexcept { return name; }
+	str_view Node::getValue() const noexcept { return value; }
+	const std::map<str_t, str_t>& Node::getAttributes() const noexcept { return attributes; }
+
+	void Node::setAttribute(str_view n, str_view v)
+	{
+		attributes[str_t(n)] = str_t(v);
+	}
+
+	void Node::push_back(NodePtr child)
+	{
+		children.push_back(child);
+	}
+
+	str_t Node::toString(bool readable, size_t depth) const noexcept
+	{
+		str_t s;
+		str_t indent = readable ? str_t(depth, '\t') : "";
+		str_t nl = readable ? "\n" : "";
+
+		switch (type)
+		{
+		case NodeType::Element:
+		{
+			s += indent + "<" + name;
+			for (auto const& [attrName, attrVal] : attributes)
+			{
+				s += " " + attrName + "=\"" + attrVal + "\"";
+			}
+
+			if (children.empty() && value.empty())
+			{
+				s += "/>" + nl;
+			}
+			else
+			{
+				s += ">";
+				if (!value.empty())
+				{
+					s += value;
+				}
+				if (!children.empty())
+				{
+					s += nl;
+					for (auto const& child : children)
+					{
+						s += child->toString(readable, depth + 1);
+					}
+					s += indent;
+				}
+				s += "</" + name + ">" + nl;
+			}
+			break;
+		}
+		case NodeType::Text:
+		{
+			s += value;
+			break;
+		}
+		case NodeType::Declaration:
+		{
+			s += indent + "<?" + name;
+			for (auto const& [attrName, attrVal] : attributes)
+			{
+				s += " " + attrName + "=\"" + attrVal + "\"";
+			}
+			s += "?>" + nl;
+			break;
+		}
+		case NodeType::Comment:
+		{
+			s += indent + "<!--" + value + "-->" + nl;
+			break;
+		}
+		default:
+			break;
+		}
+
+		return s;
+	}
+
+	Result load(str_view text, Node& nodeOut)
+	{
+		std::vector<Token> tokens;
+		Result result = lex(text, tokens);
+		if (result != Result::OK) { return result; }
+		return parse(tokens, nodeOut);
+	}
+
+	Result loadFromFile(str_view filePath, Node& nodeOut)
+	{
+		std::ifstream fs;
+		size_t fileSize;
+		if (!JSON::Internals::openFile(filePath, fs, fileSize)) { return Result::Error_File; }
+		str_t file;
+		file.resize(fileSize);
+		fs.read(&file[0], file.length());
+
+		return load(file, nodeOut);
+	}
 
 }
 
@@ -671,5 +791,247 @@ namespace XML::Internals
 {
 	using namespace XMLTextUtils;
 
+	Result lex(str_view text, std::vector<Token>& tokens)
+	{
+		bool inTag = false;
+		str_t currentTokenData;
+
+		for (size_t i = 0; i < text.length(); i++)
+		{
+			const auto c = text[i];
+
+			if (!inTag)
+			{
+				if (c == STC_CHEVRON_L)
+				{
+					// check for Comment, Declaration, or Tag
+					if (i + 3 < text.length() && text.substr(i, 4) == "<!--")
+					{
+						tokens.push_back(Token(TokenType::CommentBegin, "<!--"));
+						i += 3;
+						// lex comment content
+						size_t endComment = text.find("-->", i + 1);
+						if (endComment != str_view::npos)
+						{
+							tokens.push_back(Token(TokenType::Text, text.substr(i + 1, endComment - (i + 1))));
+							tokens.push_back(Token(TokenType::CommentEnd, "-->"));
+							i = endComment + 2;
+						}
+						continue;
+					}
+					else if (i + 1 < text.length() && text[i + 1] == STC_QUESTION)
+					{
+						tokens.push_back(Token(TokenType::DeclBegin, "<?"));
+						i++;
+						inTag = true;
+					}
+					else if (i + 1 < text.length() && text[i + 1] == STC_SLASH)
+					{
+						tokens.push_back(Token(TokenType::TagBegin, "<"));
+						tokens.push_back(Token(TokenType::Slash, "/"));
+						i++;
+						inTag = true;
+					}
+					else
+					{
+						tokens.push_back(Token(TokenType::TagBegin, "<"));
+						inTag = true;
+					}
+				}
+				else if (!isWhitespaceChar(c))
+				{
+					// text content between tags
+					size_t nextChevron = text.find(STC_CHEVRON_L, i);
+					if (nextChevron == str_view::npos)
+					{
+						tokens.push_back(Token(TokenType::Text, text.substr(i)));
+						i = text.length();
+					}
+					else
+					{
+						tokens.push_back(Token(TokenType::Text, text.substr(i, nextChevron - i)));
+						i = nextChevron - 1;
+					}
+				}
+			}
+			else
+			{
+				// inside a tag or declaration
+				if (isWhitespaceChar(c)) { continue; }
+
+				if (c == STC_CHEVRON_R)
+				{
+					tokens.push_back(Token(TokenType::TagEnd, ">"));
+					inTag = false;
+				}
+				else if (c == STC_QUESTION && i + 1 < text.length() && text[i + 1] == STC_CHEVRON_R)
+				{
+					tokens.push_back(Token(TokenType::DeclEnd, "?>"));
+					i++;
+					inTag = false;
+				}
+				else if (c == STC_SLASH)
+				{
+					tokens.push_back(Token(TokenType::Slash, "/"));
+				}
+				else if (c == STC_EQUALS)
+				{
+					tokens.push_back(Token(TokenType::Equals, "="));
+				}
+				else if (c == STR_DELIM)
+				{
+					// string literal (attribute value)
+					size_t nextQuote = text.find(STR_DELIM, i + 1);
+					if (nextQuote != str_view::npos)
+					{
+						tokens.push_back(Token(TokenType::String, text.substr(i + 1, nextQuote - (i + 1))));
+						i = nextQuote;
+					}
+				}
+				else
+				{
+					// Tag name or attribute name
+					size_t start = i;
+					while (i < text.length() && !isWhitespaceChar(text[i]) && !isStructuralChar(text[i]))
+					{
+						i++;
+					}
+					tokens.push_back(Token(TokenType::Name, text.substr(start, i - start)));
+					i--; // adjust for loop increment
+				}
+			}
+		}
+		return Result::OK;
+	}
+
+	Result parse(const std::vector<Token>& tokens, Node& nodeOut)
+	{
+		nodeOut.reset();
+		if (tokens.empty()) { return Result::Error_Parser_NoTokens; }
+
+		std::stack<NodePtr> nodeStack;
+		NodePtr root = std::make_shared<Node>(NodeType::Element, "root");
+		nodeStack.push(root);
+
+		for (size_t i = 0; i < tokens.size(); i++)
+		{
+			const auto& token = tokens[i];
+
+			if (token.type == TokenType::DeclBegin)
+			{
+				NodePtr decl = std::make_shared<Node>(NodeType::Declaration);
+				i++;
+				if (i < tokens.size() && tokens[i].type == TokenType::Name)
+				{
+					*decl = Node(NodeType::Declaration, tokens[i].data);
+					i++;
+					while (i < tokens.size() && tokens[i].type == TokenType::Name)
+					{
+						str_view attrName = tokens[i].data;
+						i++;
+						if (i + 1 < tokens.size() && tokens[i].type == TokenType::Equals && tokens[i + 1].type == TokenType::String)
+						{
+							decl->setAttribute(attrName, tokens[i + 1].data);
+							i += 2;
+						}
+					}
+					if (i < tokens.size() && tokens[i].type == TokenType::DeclEnd)
+					{
+						nodeStack.top()->push_back(decl);
+					}
+				}
+			}
+			else if (token.type == TokenType::CommentBegin)
+			{
+				i++;
+				if (i < tokens.size() && tokens[i].type == TokenType::Text)
+				{
+					NodePtr comment = std::make_shared<Node>(NodeType::Comment, "", tokens[i].data);
+					i++;
+					if (i < tokens.size() && tokens[i].type == TokenType::CommentEnd)
+					{
+						nodeStack.top()->push_back(comment);
+					}
+				}
+			}
+			else if (token.type == TokenType::TagBegin)
+			{
+				i++;
+				if (i < tokens.size() && tokens[i].type == TokenType::Slash)
+				{
+					// closing tag </name>
+					i++;
+					if (i < tokens.size() && tokens[i].type == TokenType::Name)
+					{
+						str_view tagName = tokens[i].data;
+						if (nodeStack.top()->getName() != tagName)
+						{
+							return Result::Error_Parser_MismatchedTag;
+						}
+						nodeStack.pop();
+						i++;
+						if (i >= tokens.size() || tokens[i].type != TokenType::TagEnd)
+						{
+							return Result::Error_Parser_UnexpectedToken;
+						}
+					}
+				}
+				else if (i < tokens.size() && tokens[i].type == TokenType::Name)
+				{
+					// opening tag <name ...>
+					NodePtr element = std::make_shared<Node>(NodeType::Element, tokens[i].data);
+					i++;
+					// parse attributes
+					while (i < tokens.size() && tokens[i].type == TokenType::Name)
+					{
+						str_view attrName = tokens[i].data;
+						i++;
+						if (i + 1 < tokens.size() && tokens[i].type == TokenType::Equals && tokens[i + 1].type == TokenType::String)
+						{
+							element->setAttribute(attrName, tokens[i + 1].data);
+							i += 2;
+						}
+					}
+
+					if (i < tokens.size() && tokens[i].type == TokenType::Slash)
+					{
+						// self-closing tag <name ... />
+						i++;
+						if (i < tokens.size() && tokens[i].type == TokenType::TagEnd)
+						{
+							nodeStack.top()->push_back(element);
+						}
+						else { return Result::Error_Parser_UnexpectedToken; }
+					}
+					else if (i < tokens.size() && tokens[i].type == TokenType::TagEnd)
+					{
+						nodeStack.top()->push_back(element);
+						nodeStack.push(element);
+					}
+					else { return Result::Error_Parser_UnexpectedToken; }
+				}
+			}
+			else if (token.type == TokenType::Text)
+			{
+				// inner text
+				nodeStack.top()->push_back(std::make_shared<Node>(NodeType::Text, "", token.data));
+			}
+		}
+
+		if (root->begin() != root->end())
+		{
+			// find the first Element node
+			for (auto const& child : *root)
+			{
+				if (child->getType() == NodeType::Element)
+				{
+					nodeOut = *child;
+					return Result::OK;
+				}
+			}
+		}
+
+		return Result::OK;
+	}
 }
 

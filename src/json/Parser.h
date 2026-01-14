@@ -175,18 +175,85 @@ namespace XMLTextUtils
 	constexpr auto STC_EQUALS = '=';
 	constexpr auto STR_DELIM = '"';
 	constexpr auto STC_QUESTION = '?';
+	constexpr auto STC_EXCLAMATION = '!';
+	constexpr auto STC_DASH = '-';
 
-
+	bool isStructuralChar(char_t c);
+	bool isWhitespaceChar(char_t c);
 }
 
 namespace XML
 {
+	using str_view = XMLTextUtils::str_view;
+	using str_t = XMLTextUtils::str_t;
 
+	enum class NodeType { Undefined, Element, Text, Declaration, Comment };
+
+	class Node;
+	using NodePtr = std::shared_ptr<Node>;
+
+	class Node
+	{
+	public:
+		Node() { reset(); }
+		Node(NodeType t) : type{ t } {};
+		Node(NodeType t, str_view n) : type{ t }, name{ n } {};
+		Node(NodeType t, str_view n, str_view v) : type{ t }, name{ n }, value{ v } {};
+
+		void reset();
+
+		NodeType getType() const noexcept;
+		str_view getName() const noexcept;
+		str_view getValue() const noexcept;
+		const std::map<str_t, str_t>& getAttributes() const noexcept;
+
+		void setAttribute(str_view name, str_view value);
+		void push_back(NodePtr child);
+
+		str_t toString(bool readable = true, size_t depth = 0) const noexcept;
+
+		std::vector<NodePtr>::const_iterator begin() const noexcept { return children.begin(); }
+		std::vector<NodePtr>::const_iterator end() const noexcept { return children.end(); }
+
+	private:
+		NodeType type;
+		str_t name;
+		str_t value;
+		std::map<str_t, str_t> attributes;
+		std::vector<NodePtr> children;
+	};
+
+	enum class Result : uint32_t
+	{
+		OK = 0,
+		Error_Lexer_InvalidEncoding = 401,
+		Error_Lexer_IllegalToken = 402,
+		Error_Parser_NoTokens = 501,
+		Error_Parser_MismatchedTag = 502,
+		Error_Parser_UnexpectedToken = 503,
+		Error_File = 601
+	};
+
+	Result load(str_view text, Node& nodeOut);
+	Result loadFromFile(str_view filePath, Node& nodeOut);
 }
 
 namespace XML::Internals
 {
+	enum class TokenType { Undefined, TagBegin, TagEnd, Slash, Equals, String, Name, Text, DeclBegin, DeclEnd, CommentBegin, CommentEnd };
 
+	class Token
+	{
+	public:
+		TokenType type;
+		str_t data;
+		Token() { reset(); }
+		Token(TokenType t, str_view d) : type{ t }, data{ d } {};
+		void reset() { data.clear(); type = TokenType::Undefined; }
+	};
+
+	Result lex(str_view text, std::vector<Token>& tokens);
+	Result parse(const std::vector<Token>& tokens, Node& nodeOut);
 }
 
 
