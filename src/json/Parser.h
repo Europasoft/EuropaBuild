@@ -8,19 +8,19 @@
 #include <memory>
 #include <cstdint>
 
-constexpr auto STC_SBR_L = '[';
-constexpr auto STC_SBR_R = ']';
-constexpr auto STC_CBR_L = '{';
-constexpr auto STC_CBR_R = '}';
-constexpr auto STC_CL = ':';
-constexpr auto STC_CM = ',';
-constexpr auto STR_DELIM = '"';
-
 namespace JSONTextUtils
 {
 	typedef std::string str_t;
 	typedef std::string_view str_view;
 	typedef char char_t;
+
+	constexpr auto STC_SBR_L = '[';
+	constexpr auto STC_SBR_R = ']';
+	constexpr auto STC_CBR_L = '{';
+	constexpr auto STC_CBR_R = '}';
+	constexpr auto STC_CL = ':';
+	constexpr auto STC_CM = ',';
+	constexpr auto STR_DELIM = '"';
 
 	uint8_t ctu8(char_t c);
 
@@ -40,7 +40,7 @@ namespace JSONTextUtils
 	str_view literalBooleanValue(size_t& i, str_view text);
 
 	bool isLiteralNullStr(size_t i, str_view text);
-	str_view literalNullValue(size_t& i, str_view text);
+	str_view literalNullValue(size_t& i);
 
 	// converts a single UTF-8 codepoint to UTF-32BE
 	uint32_t utf8to32be(str_view fullString, size_t& startIndexInOut);
@@ -139,10 +139,8 @@ namespace JSON
 
 }
 
-namespace
+namespace JSON::Internals
 {
-	using namespace JSONTextUtils;
-
 	enum class TokenType { Undefined, Structural, String, Number, Boolean, Null };
 	enum class StructuralTokenType { NotStructural, ObjectBegin, ObjectEnd, ArrayBegin, ArrayEnd, KeyValueDelim, MemberDelim };
 	class Token 
@@ -163,10 +161,31 @@ namespace
 
 	str_view tokenTypeToString(TokenType t);
 	JSON::ObjectType valueTokenToObjType(const Token& token);
+}
+
+namespace XMLTextUtils
+{
+	using str_t = JSONTextUtils::str_t;
+	using str_view = JSONTextUtils::str_view;
+	using char_t = JSONTextUtils::char_t;
+
+	constexpr auto STC_CHEVRON_L = '<';
+	constexpr auto STC_CHEVRON_R = '>';
+	constexpr auto STC_SLASH = '/';
+	constexpr auto STC_EQUALS = '=';
+	constexpr auto STR_DELIM = '"';
+	constexpr auto STC_QUESTION = '?';
 
 
-	
+}
 
+namespace XML
+{
+
+}
+
+namespace XML::Internals
+{
 
 }
 

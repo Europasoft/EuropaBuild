@@ -188,6 +188,7 @@ namespace JSONTextUtils
 
 namespace JSON 
 {
+	using namespace JSON::Internals;
 
 	Result load(str_view text, Object& objectOut)
 	{
@@ -432,8 +433,9 @@ namespace JSON
 
 }
 
-namespace
+namespace JSON::Internals
 {
+	using namespace JSONTextUtils;
 
 	JSON::Result lex(str_view text, std::vector<Token>& tokens)
 	{
@@ -654,5 +656,20 @@ namespace
 	}
 }
 
+namespace XMLTextUtils
+{
 
+}
+
+namespace XML
+{
+	using namespace XML::Internals;
+
+}
+
+namespace XML::Internals
+{
+	using namespace XMLTextUtils;
+
+}
 
