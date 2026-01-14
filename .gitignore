@@ -18,3 +18,4 @@ build.ninja
 [Ll]ogs/
 /test_project
 
+*.code-workspace
