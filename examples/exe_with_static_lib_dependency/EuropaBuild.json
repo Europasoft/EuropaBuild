@@ -1,0 +1,33 @@
+[
+	{
+		"target": "demo_exe",
+		"type": "executable",
+		"output path": "result/",
+		"sources":
+		[
+			"code/exe_code/"
+		],
+		"include paths":
+		[
+			"code/lib_code/"
+		],
+		"dependencies":
+		[
+			"demo_lib"
+		],
+		"lib paths": [ "result/lib/" ],
+		"libs": [ "demo_lib.lib" ]
+	},
+
+	{
+		"target": "demo_lib",
+		"type": "static library",
+		"output path": "result/lib/",
+		"sources":
+		[
+			"code/lib_code/"
+		],
+		"include paths": [],
+		"dependencies": []
+	}
+]
