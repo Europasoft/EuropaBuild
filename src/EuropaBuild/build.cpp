@@ -156,7 +156,7 @@ namespace EuropaBuild
 			{
 				// executables and libraries (archives) need to actually be linked, not just compiled
 				const std::string targetOutputPath = makeTargetFullOutputPath(target);
-				if (target.targetType == ETargetType::Executable)
+				if (isExecutable || isDynamicLib)
 				{
 					out << "build " << targetOutputPath << ": cpp_link";
 				}
@@ -185,6 +185,13 @@ namespace EuropaBuild
 						}
 					}
 				}
+
+				if (isExecutable || isDynamicLib)
+				{
+					out << std::endl;
+					out << "  ARGS =" << libraryArgs(target);
+				}
+
 				out << std::endl << std::endl;
 			}
 			if (isDynamicLib)
@@ -301,16 +308,21 @@ namespace EuropaBuild
 	fs::path BuildTool::escapeSpacesForNinja(const fs::path& p)
 	{
 		// escape spaces with the ninja escape character $
-		std::string str = p.string();
+		return fs::path(escapeSpacesForNinja(p.string()));
+	}
+
+	std::string BuildTool::escapeSpacesForNinja(std::string s)
+	{
+		// escape spaces with the ninja escape character $
 		static const char space = 32;
-		static const std::string spaceEsc = "$ ";
-		size_t pos = str.find(space);
+		static const std::string esc = "$ ";
+		size_t pos = s.find(space);
 		while (pos != std::string::npos)
 		{
-			str.replace(pos, 1, spaceEsc);
-			pos = str.find(space, pos + spaceEsc.length());
+			s.replace(pos, 1, esc);
+			pos = s.find(space, pos + esc.length());
 		}
-		return fs::path(str);
+		return s;
 	}
 
 	std::string BuildTool::includePathArgs(const TargetMapping& mapping)
@@ -321,6 +333,38 @@ namespace EuropaBuild
 			inArgs += " \"-I" + in.string() + "\"";
 		}
 		return inArgs;
+	}
+
+	std::string BuildTool::libraryArgs(const Target& target)
+	{
+		std::string libArgs;
+		// most linkers, including clang++ on windows, accept standard -L flags
+		for (const fs::path& libPath : target.libPaths)
+		{
+			libArgs += " \"-L" + libPath.string() + "\"";
+		}
+
+		// link the individual libraries
+		for (const std::string& libr : target.libs)
+		{
+			std::string lib = escapeSpacesForNinja(libr);
+			// If it ends in .lib or .a, strip the extension and prepend -l
+			if (lib.size() > 4 && (lib.compare(lib.size() - 4, 4, ".lib") == 0 || lib.compare(lib.size() - 2, 2, ".a") == 0))
+			{
+				std::string stem = lib.substr(0, lib.find_last_of('.'));
+				libArgs += " -l" + stem;
+			}
+			else if (lib.find('.') != std::string::npos || lib.rfind("-l", 0) == 0)
+			{
+				libArgs += " " + lib;
+			}
+			else
+			{
+				libArgs += " -l" + lib;
+			}
+		}
+
+		return libArgs;
 	}
 
 } // namespace EuropaBuild
