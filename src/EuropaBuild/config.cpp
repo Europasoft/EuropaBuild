@@ -54,7 +54,16 @@ namespace EuropaBuild
 			target.sources =		vectorStringsToPaths(targetFields[Target::SOURCES]->vector());
 			target.includePaths =	vectorStringsToPaths(targetFields[Target::INCLUDES]->vector());
 			target.depends =		targetFields[Target::DEPENDS]->vector();
-			
+			// read optional library parameters (or set empty arrays if absent)
+			if (targetJson->hasNamedSubobject(Target::LIBPATHS))
+			{
+				target.libPaths = vectorStringsToPaths(targetFields[Target::LIBPATHS]->vector());
+			}
+			if (targetJson->hasNamedSubobject(Target::LIBS))
+			{
+				target.libs = targetFields[Target::LIBS]->vector();
+			}
+
 			targets.push_back(targetPtr);
 		}
 

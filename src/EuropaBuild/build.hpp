@@ -42,6 +42,7 @@ namespace EuropaBuild
 		static void writeArchiverRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
 
 		static fs::path escapeSpacesForNinja(const fs::path& p);
+		static std::string escapeSpacesForNinja(std::string s);
 
 		static std::string sourceFilePathToObjFilenameString(const fs::path& sourcePath, std::string suffix);
 
@@ -51,6 +52,8 @@ namespace EuropaBuild
 
 		static void generateNinjaBuild(const BuildTree& tree, std::shared_ptr<std::vector<TargetMapping>> mappings,
 			std::shared_ptr<FindTool::Toolchain> toolchain);
+
+		static std::string libraryArgs(const Target& target);
 
 	};
 

@@ -33,6 +33,8 @@ namespace EuropaBuild
 		std::vector<fs::path> sources;
 		std::vector<fs::path> includePaths;
 		std::vector<std::string> depends;
+		std::vector<fs::path> libPaths;
+		std::vector<std::string> libs;
 
 		// standard names for fields in a target JSON object
 		static inline constexpr auto NAME = "target";
@@ -41,6 +43,8 @@ namespace EuropaBuild
 		static inline constexpr auto SOURCES = "sources";
 		static inline constexpr auto INCLUDES = "include paths";
 		static inline constexpr auto DEPENDS = "dependencies";
+		static inline constexpr auto LIBPATHS = "lib paths";
+		static inline constexpr auto LIBS = "libs";
 	};
 
 	struct TargetMapping
