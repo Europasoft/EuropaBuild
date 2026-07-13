@@ -80,21 +80,35 @@ namespace EuropaBuild
 		for (const auto& subdir : paths)
 		{
 			const auto relpath = fs::current_path() / subdir;
-			for (const auto& entry : fs::recursive_directory_iterator(relpath))
+
+			// each source path in the json file may be either a directory path or a path to a specific cpp file
+			if (fs::is_directory(relpath))
 			{
-				if (entry.is_regular_file())
+				for (const auto& entry : fs::recursive_directory_iterator(relpath))
 				{
-					const auto& path = entry.path();
-					const auto ext = path.extension();
-					if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c++")
+					if (entry.is_regular_file())
 					{
-						source_files.push_back(fs::relative(path, fs::current_path()));
+						const auto& path = entry.path();
+						const auto ext = path.extension();
+						if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c++")
+						{
+							source_files.push_back(fs::relative(path, fs::current_path()));
+						}
 					}
+				}
+			}
+			else if (fs::is_regular_file(relpath))
+			{
+				const auto ext = relpath.extension();
+				if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c++")
+				{
+					source_files.push_back(fs::relative(relpath, fs::current_path()));
 				}
 			}
 		}
 
 		std::sort(source_files.begin(), source_files.end());
+		source_files.erase(std::unique(source_files.begin(), source_files.end()), source_files.end());
 		return source_files;
 	}
 
@@ -251,7 +265,30 @@ namespace EuropaBuild
 		auto const& [ret, out, err] = Util::process(std::vector<std::string>{ "ninja" });
 		if (ret != 0)
 		{
-			std::cerr << ESLog::colorMessage("Command failed (code " + std::to_string(ret) + ")\n" + err + "\n", ESLog::BRIGHT_RED);
+			// handle ninja error
+			std::string detailedError = "Ninja error (code " + std::to_string(ret) + ")\n\n";
+
+			// info from stderr
+			if (!err.empty())
+			{
+				detailedError += "--- Captured output (stderr) ---\n" + err + "\n";
+			}
+			// info from stdout
+			if (!out.empty())
+			{
+				detailedError += "--- Captured output (stdout) ---\n" + out + "\n";
+				// provide hints in some specific known error cases
+				if (out.find("STL1000") != std::string::npos || out.find("Unexpected compiler version") != std::string::npos)
+				{
+					detailedError += "\nTip: Another compiler version is required.\nPlease update the compiler.\n";
+				}
+			}
+			else if (err.empty())
+			{
+				detailedError += "No error information to show. Make sure Ninja is installed and that that 'ninja' command is usable.\n";
+			}
+
+			std::cerr << ESLog::colorMessage(detailedError, ESLog::BRIGHT_RED);
 			return ret;
 		}
 		std::cout << out << std::endl;
