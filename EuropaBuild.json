@@ -16,7 +16,9 @@
 		[
 			"MesonPlusPlus",
 			"europasoft-json"
-		]
+		],
+		"lib paths": [],
+		"libs": []
 	},
 
 	{
@@ -27,12 +29,10 @@
 		[
 			"src/europasoft-json/Source"
 		],
-		"include paths":
-		[
-		],
-		"dependencies":
-		[
-		]
+		"include paths": [],
+		"dependencies": [],
+		"lib paths": [],
+		"libs": []
 	},
 
 	{
@@ -48,8 +48,8 @@
 			"src/",
 			"src/util"
 		],
-		"dependencies":
-		[
-		]
+		"dependencies": [],
+		"lib paths": [],
+		"libs": []
 	}
 ]
