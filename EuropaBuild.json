@@ -15,17 +15,17 @@
 		"dependencies":
 		[
 			"MesonPlusPlus",
-			"EuropasoftJSON"
+			"europasoft-json"
 		]
 	},
 
 	{
-		"target": "EuropasoftJSON",
+		"target": "europasoft-json",
 		"type": "dependency",
 		"output path": "",
 		"sources":
 		[
-			"src/json/"
+			"src/europasoft-json/Source"
 		],
 		"include paths":
 		[
