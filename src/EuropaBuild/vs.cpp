@@ -1,4 +1,6 @@
 #include "EuropaBuild/vs.hpp"
+#include "EuropaBuild/main.hpp"
+#include "EuropaBuild/tree.hpp"
 #include "europasoft-json/Source/Parser.h"
 #include <fstream>
 #include <regex>
@@ -8,7 +10,9 @@
 
 namespace EuropaBuild::VS
 {
-	std::shared_ptr<BuildConfig> VSParser::parseSolution(const fs::path& slnPath)
+	using Target = EuropaBuild::Target;
+
+	std::shared_ptr<BuildTree> VSParser::parseSolution(const fs::path& slnPath)
 	{
 		if (!fs::exists(slnPath))
 		{
@@ -50,10 +54,8 @@ namespace EuropaBuild::VS
 			}
 		}
 
-		auto config = std::make_shared<BuildConfig>();
-		config->tree = std::make_unique<BuildTree>(targets);
-		config->intermediateDir = INTERMEDIATE_DIR;
-		return config;
+		auto tree = std::make_shared<BuildTree>(targets);
+		return tree;
 	}
 
 	std::shared_ptr<Target> VSParser::parseProject(const fs::path& vcxprojPath, const fs::path& solutionDir)
@@ -64,7 +66,7 @@ namespace EuropaBuild::VS
 			return nullptr;
 		}
 
-		auto target = std::make_shared<Target>();
+		std::shared_ptr<Target> target = std::make_shared<Target>();
 		const fs::path projectDir = vcxprojPath.parent_path();
 		target->name = vcxprojPath.stem().string();
 		target->outputPath = "build/";

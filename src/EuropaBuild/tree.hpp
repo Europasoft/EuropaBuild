@@ -1,6 +1,4 @@
-
 #pragma once
-#include "europasoft-json/Source/Parser.h"
 
 #include <filesystem>
 #include <iostream>
@@ -18,20 +16,7 @@ namespace EuropaBuild
 {
 	namespace fs = std::filesystem;
 
-	struct ConfigException : std::runtime_error
-	{
-		using std::runtime_error::runtime_error;
-	};
-	struct DependencyException : std::runtime_error
-	{
-		using std::runtime_error::runtime_error;
-	};
-	struct EnvironmentException : std::runtime_error
-	{
-		using std::runtime_error::runtime_error;
-	};
-
-	enum class ETargetType : uint32_t
+	enum class ETargetType : int
 	{
 		Unknown = 0,
 		Dependency = 1,
@@ -58,6 +43,12 @@ namespace EuropaBuild
 		static inline constexpr auto DEPENDS = "dependencies";
 	};
 
+	struct TargetMapping
+	{
+		std::shared_ptr<const Target> target = nullptr;
+		std::vector<fs::path> sourceFiles;
+	};
+
 	using Targets = std::vector<std::shared_ptr<const Target>>;
 
 	// the build tree orders the targets into a sensible build order based on their interdependencies
@@ -74,15 +65,6 @@ namespace EuropaBuild
 		std::string getWholeDependecyTreeAsString() const;
 	private:
 		std::string getDependecyTreeForTarget(const Target& t, size_t& iterationDepth) const;
-	};
-
-	static inline constexpr auto INTERMEDIATE_DIR = "Intermediate";
-
-	class BuildConfig
-	{
-	public:
-		std::unique_ptr<BuildTree> tree = nullptr;
-		fs::path intermediateDir;
 	};
 
 } // namespace EuropaBuild
