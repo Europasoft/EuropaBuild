@@ -1,5 +1,6 @@
-﻿
-#include "EuropaBuild/config.hpp"
+﻿#include "EuropaBuild/config.hpp"
+#include "EuropaBuild/tree.hpp"
+#include "EuropaBuild/main.hpp"
 #include "europasoft-json/Source/Parser.h"
 
 #include <cstdint>
@@ -12,19 +13,11 @@
 #include <string>
 #include <map>
 
+namespace fs = std::filesystem;
+
 namespace EuropaBuild
 {
-	/*BuildConfig BuildConfig::configDefault()
-	{
-		BuildConfig config;
-		config.source_dir = fs::current_path();
-		config.build_dir = fs::current_path() / "build";
-		config.output_name = "app";
-		config.build_type = "exe";
-		return config;
-	}*/
-
-	std::shared_ptr<BuildConfig> ConfigUtils::parseConfigFromJson(const std::filesystem::path& fullPath)
+	std::shared_ptr<BuildTree> ConfigUtils::parseBuildTreeFromJson(const std::filesystem::path& fullPath)
 	{
 		using namespace JSON;
 		
@@ -65,10 +58,9 @@ namespace EuropaBuild
 			targets.push_back(targetPtr);
 		}
 
-		std::shared_ptr<BuildConfig> config = std::make_shared<BuildConfig>();
-		config->tree = std::make_unique<BuildTree>(targets); // this performs dependency analysis to sort the targets
-
-		return config;
+		// this performs dependency analysis to sort the targets
+		std::shared_ptr<BuildTree> tree = std::make_shared<BuildTree>(targets);
+		return tree;
 	}
 
 	ETargetType ConfigUtils::targetTypeFromString(std::string_view str)
@@ -85,187 +77,6 @@ namespace EuropaBuild
 		return ETargetType::Unknown;
 	}
 	
-	/*BuildConfig parseConfigFromCommands(int argc, char* argv[])
-	{
-		BuildConfig config = BuildConfig::configDefault();
-
-		for (int i = 1; i < argc; i++)
-		{
-			std::string arg = argv[i];
-
-			if (arg == "--help" || arg == "-h")
-			{
-				std::cout << "Simple C++ Build System" << std::endl
-					<< "Usage: " << argv[0] << " [options]" << std::endl
-					<< "Options:" << std::endl
-					<< "  --source-dir DIR    Source directory (default: current directory)"
-					<< std::endl
-					<< "  --build-dir DIR     Build directory (default: ./build)" << std::endl
-					<< "  --output NAME       Output name (default: app)" << std::endl
-					<< "  --type TYPE         Build type: exe or lib (default: exe)" << std::endl
-					<< "  --cpp-arg ARG       Additional C++ compiler arguments" << std::endl
-					<< "  --verbose           Verbose output" << std::endl
-					<< "  --help, -h          Show this help" << std::endl;
-				exit(0);
-			}
-			else if (arg == "--source-dir" && i + 1 < argc)
-			{
-				config.source_dir = fs::absolute(argv[++i]);
-			}
-			else if (arg == "--build-dir" && i + 1 < argc)
-			{
-				config.build_dir = fs::absolute(argv[++i]);
-			}
-			else if (arg == "--output" && i + 1 < argc)
-			{
-				config.output_name = argv[++i];
-			}
-			else if (arg == "--type" && i + 1 < argc)
-			{
-				config.build_type = argv[++i];
-				if (config.build_type != "exe" && config.build_type != "lib") {
-					std::cerr << "Invalid build type. Must be 'exe' or 'lib'" << std::endl;
-					exit(1);
-				}
-			}
-			else if (arg == "--cpp-arg" && i + 1 < argc)
-			{
-				config.cpp_args.push_back(argv[++i]);
-			}
-			else if (arg == "--verbose")
-			{
-				config.verbose = true;
-			}
-			else
-			{
-				std::cerr << "Unknown argument: " << arg << std::endl;
-				exit(1);
-			}
-		}
-
-		return config;
-	}*/
-	
-	
-	BuildTree::BuildTree(const Targets& targets)
-	{
-		// sort target dependencies so they will be built in order
-
-		using TargetPtr = std::shared_ptr<const Target>;
-		std::unordered_map<std::string, int> inDegree;
-		std::unordered_map<std::string, TargetPtr> nameToTarget;
-		// maps a dependency to the targets that depend on it (dependency -> dependents)
-		std::unordered_map<std::string, std::vector<std::string>> adjacencyList;
-		// this is only used to determine which targets are "final", i.e. ones that no others depend on
-		std::vector<std::string> allDependencies;
-
-		for (const TargetPtr& target : targets)
-		{
-			nameToTarget[target->name] = target;
-			inDegree[target->name] = 0;
-			allDependencies.insert(allDependencies.end(), target->depends.begin(), target->depends.end());
-		}
-
-		// build adjacency list and in-degrees
-		for (const TargetPtr& target : targets)
-		{
-			// U is the current target
-			const std::string& U = target->name;
-
-			for (const std::string& V : target->depends) 
-			{
-				// V is a dependency of U, so V must be built before U
-				if (nameToTarget.find(V) == nameToTarget.end()) 
-				{
-					throw std::runtime_error("Failed to resolve dependency graph, target " + U + " depends on non-existent target " + V);
-				}
-
-				// V is a prerequisite, and U is a dependent of V
-				// add U to V's adjacency list (what V needs to notify when built)
-				adjacencyList[V].push_back(U);
-
-				// increment U's in-degree because V is a dependency for U
-				inDegree[U]++;
-			}
-		}
-
-		// Kahn's algorithm
-		std::queue<std::string> q;
-
-		for (const auto& pair : inDegree) 
-		{
-			if (pair.second == 0)
-			{
-				q.push(pair.first);
-			}
-		}
-
-		while (!q.empty()) 
-		{
-			std::string current_name = q.front();
-			q.pop();
-
-			targetsOrdered.push_back(nameToTarget.at(current_name));
-
-			// iterate all targets that depend on the current one
-			if (adjacencyList.count(current_name)) 
-			{
-				for (const std::string& dependent_name : adjacencyList.at(current_name)) 
-				{
-					inDegree[dependent_name]--;
-
-					// if in-degree hits 0 it means all dependencies are satisfied
-					if (inDegree[dependent_name] == 0) {
-						q.push(dependent_name);
-					}
-				}
-			}
-		}
-
-		if (targetsOrdered.size() != targets.size()) 
-		{
-			throw std::runtime_error("Failed to resolve dependency graph, circular dependency detected");
-		}
-
-		for (const TargetPtr& target : targetsOrdered)
-		{
-			auto it = std::find(allDependencies.begin(), allDependencies.end(), target->name);
-			if (it == allDependencies.end())
-				targetsThatAreFinalProducts.push_back(target);
-		}
-	}
-
-	Targets::const_iterator BuildTree::begin() const { return targetsOrdered.begin(); }
-	Targets::const_iterator BuildTree::end() const { return targetsOrdered.end(); }
-	size_t BuildTree::size() const { return targetsOrdered.size(); }
-
-	std::string BuildTree::getWholeDependecyTreeAsString() const
-	{
-		std::string s;
-		size_t iterationDepth = 0;
-		for (const auto& target : targetsOrdered)
-			s += "Target: " + getDependecyTreeForTarget(*target, iterationDepth) + "\n";
-		return s;
-	}
-
-	std::string BuildTree::getDependecyTreeForTarget(const Target& t, size_t& iterationDepth) const
-	{
-		iterationDepth++;
-		std::string s;
-		for (auto i = 0; i < iterationDepth - 1; i++)
-			s += (i != iterationDepth - 2) ? "  " : " |"; // indent accorrding to dependency nesting level
-		s +=  t.name + "\n";
-		for (const std::string& d : t.depends)
-		{
-			Targets::const_iterator it = std::find_if(targetsOrdered.begin(), targetsOrdered.end(),
-				[d](const std::shared_ptr<const Target>& candidate)
-				{ return candidate->name == d; });
-			s += (it != targetsOrdered.end()) ? getDependecyTreeForTarget(*it->get(), iterationDepth) : "???";	
-		}
-		iterationDepth--;
-		return s;
-	}
-
 #define SANITY_CHECK_FIELD(targetJson, field) if (not targetJson->hasNamedSubobject(field))\
 	throw ConfigException("Target is missing a required field: " + std::string(field) + "\n" + targetJson->toString(true));
 
@@ -316,6 +127,61 @@ namespace EuropaBuild
 				return std::tolower(c);
 			});
 		return s;
+	}
+
+	void ConfigUtils::cleanIntermediateFiles()
+	{
+		fs::path intermediateDir = GET_INTERMEDIATE_PATH();
+		if (fs::exists(intermediateDir) && fs::is_directory(intermediateDir))
+		{
+			log("Clean rebuild\n");
+			// wipe *.o files
+			for (const auto& entry : fs::directory_iterator(intermediateDir))
+			{
+				if (entry.is_regular_file() && entry.path().extension() == ".o")
+				{
+					fs::remove(entry.path());
+				}
+			}
+		}
+		else
+		{
+			log("Could not find intermediate files - cleaning skipped");
+		}
+	}
+
+
+	EuropaBuildArgs::EuropaBuildArgs(int argc, char* argv[])
+	{
+		log("\n" + std::string(SPLASH_MESSAGE) + "\n\n", LogColors::CYAN);
+		// fallback to default path if not provided
+		configPath = std::filesystem::current_path() / CONF_FILENAME;
+
+		for (int i = 1; i < argc; ++i)
+		{
+			std::string_view arg(argv[i]);
+
+			if (arg == "-r" || arg == "--rebuild")
+			{
+				rebuild = true;
+			}
+			// -c or --config to use an alternate path to the build config json file
+			else if (arg == "-c" || arg == "--config")
+			{
+				if (i + 1 < argc)
+				{
+					configPath = argv[++i]; // consume next arg as the path
+				}
+				else
+				{
+					throw ConfigException("Missing path after " + std::string(arg));
+				}
+			}
+			else
+			{
+				throw ConfigException("Unknown argument: " + std::string(arg));
+			}
+		}
 	}
 
 } // namespace EuropaBuild
