@@ -165,24 +165,53 @@ namespace EuropaBuild
 					out << "build " << targetOutputPath << ": cpp_archive";
 				}
 
+				// write the target's own compiled object files
 				for (const std::string& obj : objectFiles)
 				{
 					out << " " << obj;
 				}
 				// also link against object files from dependency-targets built before this one
 				// the other target that is the dependency must be marked as such in the dependencies list for this target
-				if (target.depends.size() > 0)
+				std::vector<std::string> implicitDeps; // to track the built files we depend on
+				for (const auto& depName : target.depends)
 				{
-					for (const auto& depName : target.depends)
+					// HANDLING ANOTHER TARGET THAT IS LISTED AS A DEPENDENCY OF THIS TARGET
+					if (depObjectFiles.find(depName) == depObjectFiles.end())
 					{
-						if (depObjectFiles.find(depName) == depObjectFiles.end())
+						throw DependencyException("Target " + target.name + " is set to depend on " + depName + " but the latter could not be found");
+					}
+					// find the target dependency to see what type it is
+					auto depTargetIt = std::find_if(mappings->begin(), mappings->end(),
+						[&depName](const TargetMapping& m) { return m.target->name == depName; });
+
+					if (depTargetIt != mappings->end())
+					{
+						const Target& depTarget = *depTargetIt->target;
+
+						if (depTarget.targetType == ETargetType::Dependency)
 						{
-							throw DependencyException("Target " + target.name + " is set to depend on " + depName + " but the latter could not be found");
+							// "dependency" targets get directly compiled into this target
+							for (const auto& obj : depObjectFiles[depName])
+							{
+								out << " " << obj;
+							}
 						}
-						for (const auto& obj : depObjectFiles[depName])
+						else if (depTarget.targetType == ETargetType::StaticLib || depTarget.targetType == ETargetType::DynamicLib)
 						{
-							out << " " << obj;
+							// Ninja needs to know that this is an "implicitly dependency",
+							// since the library binary file must be fully compiled and linked before the target that depends on it
+							implicitDeps.push_back(makeTargetFullOutputPath(depTarget));
 						}
+					}
+				}
+
+				// append Ninja implicit dependencies if there are any
+				if (!implicitDeps.empty())
+				{
+					out << " |"; // pipes indicate implicit dependencies in Ninja
+					for (const auto& depPath : implicitDeps)
+					{
+						out << " " << depPath;
 					}
 				}
 
