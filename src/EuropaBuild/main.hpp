@@ -42,9 +42,10 @@ namespace EuropaBuild
 		return (color + std::string(message) + LogColors::RESET);
 	}
 
-	inline void log(std::string_view message, const char* color = LogColors::RESET)
+	inline void log(std::string_view message, const char* color = LogColors::RESET, bool endl = true)
 	{
-		std::cout << colorMessage(message, color) << std::endl;
+		std::cout << colorMessage(message, color);
+		if (endl) std::cout << std::endl;
 	}
 
 	struct ConfigException : std::runtime_error

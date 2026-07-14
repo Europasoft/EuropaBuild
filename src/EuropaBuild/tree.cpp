@@ -6,7 +6,8 @@
 namespace EuropaBuild
 {
 
-	BuildTree::BuildTree(const Targets& targets)
+	BuildTree::BuildTree(const Targets& targets, GeneralBuildSettings generalSettings)
+		: generalSettings(generalSettings)
 	{
 		// sort target dependencies so they will be built in order
 

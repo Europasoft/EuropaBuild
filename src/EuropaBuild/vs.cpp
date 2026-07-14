@@ -54,7 +54,7 @@ namespace EuropaBuild::VS
 			}
 		}
 
-		auto tree = std::make_shared<BuildTree>(targets);
+		auto tree = std::make_shared<BuildTree>(targets, GeneralBuildSettings());
 		return tree;
 	}
 

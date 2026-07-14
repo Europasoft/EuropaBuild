@@ -1,5 +1,6 @@
 ﻿
 #include "EuropaBuild/findtool.hpp"
+#include "EuropaBuild/compilers.hpp"
 #include "util/process.hpp"
 #include "europasoft-json/Source/Parser.h"
 
@@ -18,38 +19,32 @@ namespace EuropaBuild::FindTool
 		return (ret == 0) and (out.find(this->locateMatch) != std::string::npos);
 	}
 
+	bool Compiler::isFileCompatible(const std::filesystem::path& ext, const std::vector<std::string>& acceptable)
+	{
+		auto x = ext.string();
+		std::transform(x.begin(), x.end(), x.begin(), [](unsigned char c)
+			{
+				return std::tolower(c);
+			});
+		return std::any_of(acceptable.begin(), acceptable.end(), [&x](const std::string& valid_ext)
+			{
+				return x == valid_ext;
+			});
+	}
+
 	std::shared_ptr<Toolchain> Toolchain::selectToolchain()
 	{
 		std::shared_ptr<Toolchain> toolchain;
 		toolchain = std::make_shared<Toolchain>();
 
 		// search for available compilers
-		static const std::vector<std::shared_ptr<Compiler>> compilers =
+		for (const Compiler* com : AllCompilers::cppCompilers)
 		{
-			// TODO: support generating visual studio project files
-			//EuropaBuild::MSVC::findMSVC(),
-
-			std::make_shared<Compiler>(Compiler{
-				.name = "CLANG",
-				.command = "clang++",
-				.compileFlag = "-c",
-				.locateCommand = "clang++ --version",
-				.locateMatch = "clang version"}),
-
-			std::make_shared<Compiler>(Compiler{
-				.name = "GNU", 
-				.command = "g++", 
-				.compileFlag = "-c", 
-				.locateCommand = "g++ --version", 
-				.locateMatch = "Free Software Foundation"})
-		};
-
-		for (const std::shared_ptr<Compiler>& com : compilers)
-		{
-			if (com.get() and com->isPresent())
+			if (com and com->isPresent())
 			{
-				toolchain->compiler = com;
-				break; // found a suitable compiler
+				// found a suitable compiler
+				toolchain->compiler = std::make_shared<Compiler>(*com);
+				break;
 			}
 		}
 		

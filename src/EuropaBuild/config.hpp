@@ -15,6 +15,7 @@ namespace JSON
 namespace EuropaBuild
 {
 	class BuildTree;
+	struct GeneralBuildSettings;
 	enum class ETargetType : int;
 	namespace fs = std::filesystem;
 
@@ -22,6 +23,7 @@ namespace EuropaBuild
 	{
 	public:
 		static std::shared_ptr<BuildTree> parseBuildTreeFromJson(const std::filesystem::path& fullPath);
+		static GeneralBuildSettings parseGeneralSettingsFromJson(const JSON::ObjectPtr& obj);
 		//static BuildConfig parseConfigFromCommands(int argc, char* argv[]);
 		static void targetSanityCheck(const JSON::ObjectPtr& targetJson);
 		static ETargetType targetTypeFromString(std::string_view str);

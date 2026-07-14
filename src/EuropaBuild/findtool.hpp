@@ -22,7 +22,11 @@ namespace EuropaBuild::FindTool
 		std::string compileFlag;
 		std::string locateCommand;
 		std::string locateMatch;
+		std::string compileRuleName;
+		std::vector<std::string> associatedFileExtensions;
+		Compiler* compiler2 = nullptr;
 		bool isPresent() const;
+		static bool isFileCompatible(const std::filesystem::path& ext, const std::vector<std::string>& acceptable);
 	};
 
 	class Toolchain
@@ -33,6 +37,9 @@ namespace EuropaBuild::FindTool
 		static std::shared_ptr<Toolchain> selectToolchain();
 
 	};
+
+	static const std::vector<std::string> cppSourceFileExtensions = { ".cpp", ".cxx", ".cc", ".c++" };
+	static const std::vector<std::string> cSourceFileExtensions = { ".c" };
 
 } // namespace EuropaBuild
 
