@@ -8,6 +8,7 @@
 #include <string>
 #include <algorithm>
 #include <map>
+#include <regex>
 
 namespace EuropaBuild
 {
@@ -71,6 +72,13 @@ namespace EuropaBuild
 
 	std::vector<fs::path> BuildTool::discoverSourceFiles(const std::vector<fs::path>& paths)
 	{
+		// returns true if the file is a .cpp or .c
+		auto isSourceCodeFile = [](const fs::path& ext) -> bool
+			{
+				using namespace FindTool;
+				return Compiler::isFileCompatible(ext, cppSourceFileExtensions) || Compiler::isFileCompatible(ext, cSourceFileExtensions);
+			};
+
 		std::vector<fs::path> source_files;
 
 		for (const auto& subdir : paths)
@@ -85,8 +93,7 @@ namespace EuropaBuild
 					if (entry.is_regular_file())
 					{
 						const auto& path = entry.path();
-						const auto ext = path.extension();
-						if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c++")
+						if (isSourceCodeFile(path.extension()))
 						{
 							source_files.push_back(fs::relative(path, fs::current_path()));
 						}
@@ -95,8 +102,7 @@ namespace EuropaBuild
 			}
 			else if (fs::is_regular_file(relpath))
 			{
-				const auto ext = relpath.extension();
-				if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c++")
+				if (isSourceCodeFile(relpath.extension()))
 				{
 					source_files.push_back(fs::relative(relpath, fs::current_path()));
 				}
@@ -110,34 +116,69 @@ namespace EuropaBuild
 
 	void BuildTool::generateNinjaBuild(const BuildTree& tree, std::shared_ptr<std::vector<TargetMapping>> mappings, std::shared_ptr<FindTool::Toolchain> toolchain)
 	{
+		using namespace FindTool;
 		std::ofstream out(fs::current_path() / NINJA_FILENAME);
 
-		out << "# EuropaBuild C++ Generated build file" << std::endl
+		out << "# EuropaBuild generated Ninja build file" << std::endl
 			<< "# ====================================" << std::endl
 			<< std::endl
 			<< "ninja_required_version = 1.8.2" << std::endl
 			<< std::endl;
 
-		writeCompilerRule(out, toolchain);
+		const Compiler& compiler = *toolchain->compiler.get();
+
+		writeCompilerRule(out, "cpp_compile", compiler);
+		if (compiler.compiler2 && compiler.compiler2->isPresent())
+		{
+			writeCompilerRule(out, "c_compile", *compiler.compiler2);
+		}
 		writeLinkerRule(out, toolchain);
 		writeArchiverRule(out, toolchain);
 		out << std::endl;
 
-		size_t sourceFileCounter = 0;
+		
 		std::map<std::string, std::vector<std::string>> depObjectFiles;
 		for (const TargetMapping& mapping : *mappings)
 		{
 			const Target& target = *mapping.target;
 			std::vector<std::string> objectFiles;
+			size_t sourceFileCounter = 0;
 			for (const fs::path& sourceFilePath : mapping.sourceFiles)
 			{
-				// source file compile command
-				std::string objFile = sourceFilePathToObjFilenameString(fs::path(sourceFilePath), std::to_string(sourceFileCounter));
-				sourceFileCounter++;
+				// writing a source file compile entry
+				const fs::path ext = sourceFilePath.extension();
+				const std::string objFile = sourceFilePathToObjFilenameString(fs::path(sourceFilePath), std::to_string(sourceFileCounter));
 				objectFiles.push_back(objFile);
-				out << "build " << objFile << ": cpp_compile " << escapeSpacesForNinja(fs::path(sourceFilePath)).string() << std::endl;
-				out << "  ARGS =" << includePathArgs(mapping) << " -std=c++20";
+
+				if (Compiler::isFileCompatible(ext, compiler.associatedFileExtensions))
+				{
+					// this file should use the primary compiler (probably C++)
+					out << "build " << objFile << ": " << compiler.compileRuleName << " " << escapeSpacesForNinja(fs::path(sourceFilePath)).string() << std::endl;
+					out << "  ARGS =" << includePathArgs(mapping);
+					// add user-defined compiler args
+					for (const std::string& arg : tree.generalSettings.cppCompilerArgs)
+					{
+						out << " " << arg;
+					}
+				}
+				else if (compiler.compiler2 && Compiler::isFileCompatible(ext, compiler.compiler2->associatedFileExtensions))
+				{
+					// this file should use the secondary compiler (probably C)
+					out << "build " << objFile << ": " << compiler.compiler2->compileRuleName << " " << escapeSpacesForNinja(fs::path(sourceFilePath)).string() << std::endl;
+					out << "  ARGS =" << includePathArgs(mapping);
+					// add user-defined compiler args
+					for (const std::string& arg : tree.generalSettings.cCompilerArgs)
+					{
+						out << " " << arg;
+					}
+				}
+				else
+				{
+					throw EnvironmentException("File was detected as a source file, but the compiler is not registered to support it " + sourceFilePath.string());
+				}
+				
 				out << std::endl << std::endl;
+				sourceFileCounter++;
 			}
 
 			const bool isExecutable = target.targetType == ETargetType::Executable;
@@ -219,6 +260,11 @@ namespace EuropaBuild
 				{
 					out << std::endl;
 					out << "  ARGS =" << libraryArgs(target);
+					// add user-defined linker args
+					for (const std::string& arg : tree.generalSettings.linkerArgs)
+					{
+						out << " " << arg;
+					}
 				}
 
 				out << std::endl << std::endl;
@@ -241,15 +287,13 @@ namespace EuropaBuild
 		out << std::endl;
 	}
 
-	void BuildTool::writeCompilerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain)
+	void BuildTool::writeCompilerRule(std::ofstream& out, const std::string& ruleName, const EuropaBuild::FindTool::Compiler& compiler)
 	{
-		out << "rule cpp_compile" << std::endl << "  command =";
-		out << " " << toolchain->compiler->command;
-
-		out << " " << toolchain->compiler->compileFlag;
-
+		out << "rule " << ruleName << std::endl << "  command =";
+		out << " " << compiler.command;
+		out << " " << compiler.compileFlag;
 		out << " ${ARGS} -o ${out} ${in}" << std::endl
-			<< "  description = Compiling C++ object ${out}" << std::endl
+			<< "  description = Compiling object ${out}" << std::endl
 			<< std::endl;
 	}
 
@@ -298,7 +342,8 @@ namespace EuropaBuild
 		if (ret != 0)
 		{
 			// handle ninja error
-			std::string detailedError = "Ninja error (code " + std::to_string(ret) + ")\n\n";
+			log(std::string("Ninja error (code " + std::to_string(ret) + ")\n\n"), LogColors::BRIGHT_RED);
+			std::string detailedError;
 
 			// info from stderr
 			if (!err.empty())
@@ -317,15 +362,48 @@ namespace EuropaBuild
 			}
 			else if (err.empty())
 			{
-				detailedError += "No error information to show. Make sure Ninja is installed and that that 'ninja' command is usable.\n";
+				throw EnvironmentException("No error information to show. Make sure Ninja is installed and that that 'ninja' command is usable.\n");
 			}
+			
 
-			throw EnvironmentException(detailedError);
+			detailedError = colorLinesInText(detailedError, "error|errors|fatal|failed", LogColors::BRIGHT_RED);
+			detailedError = colorLinesInText(detailedError, "warning|warnings", LogColors::YELLOW);
+			log(detailedError, LogColors::DEFAULT);
+			return 2;
 		}
 
 		log(out, LogColors::BLUE);
 		log("Build completed", LogColors::CYAN);
 		return 0;
+	}
+
+	std::string BuildTool::colorWordInText(std::string text, std::string word, const char* color)
+	{
+		// use regex with word boundaries (\b) so we don't accidentally color words like  "errorless"
+		const std::string pattern = std::string("\\b(" + word + ")\\b");
+		const std::regex rx(pattern, std::regex_constants::icase);
+		return std::regex_replace(text, rx, std::string(color) + "$1" + std::string(LogColors::RESET));
+	}
+
+	std::string BuildTool::colorLinesInText(const std::string& text, const std::string& word, const char* color)
+	{
+		const std::string pattern = std::string("\\b(" + word + ")\\b");
+		const std::regex rx(pattern, std::regex_constants::icase);
+		std::stringstream ss(text);
+		std::string line;
+		std::string result;
+
+		while (std::getline(ss, line)) 
+		{
+			if (std::regex_search(line, rx)) 
+				result += std::string(color) + line + std::string(LogColors::RESET) + "\n";
+			else 
+				result += line + "\n";
+		}
+
+		if (!text.empty() && text.back() != '\n' && !result.empty()) result.pop_back(); // stri trailing newline
+
+		return result;
 	}
 
 	void BuildTool::createRelativeDirectory(const fs::path& path)

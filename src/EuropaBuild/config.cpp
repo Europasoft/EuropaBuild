@@ -41,8 +41,15 @@ namespace EuropaBuild
 
 		// process each target specified in the build file
 		std::vector<std::shared_ptr<const Target>> targets;
+		GeneralBuildSettings generalSettings;
 		for (const JSON::ObjectPtr& targetJson : file)
 		{
+			if (targetJson->hasNamedSubobject(GeneralBuildSettings::NAME)) // differentiate by checking for a known key
+			{
+				generalSettings = parseGeneralSettingsFromJson(targetJson); // a "general settings" object is not a build target, its settings applies to all targets
+				continue;
+			}
+
 			targetSanityCheck(targetJson);
 			std::shared_ptr<Target> targetPtr = std::make_shared<Target>();
 			Target& target = *targetPtr;
@@ -68,8 +75,31 @@ namespace EuropaBuild
 		}
 
 		// this performs dependency analysis to sort the targets
-		std::shared_ptr<BuildTree> tree = std::make_shared<BuildTree>(targets);
+		std::shared_ptr<BuildTree> tree = std::make_shared<BuildTree>(targets, generalSettings);
 		return tree;
+	}
+
+	GeneralBuildSettings ConfigUtils::parseGeneralSettingsFromJson(const JSON::ObjectPtr& obj)
+	{
+		GeneralBuildSettings s;
+		std::map<std::string, JSON::ObjectPtr> fields = obj->map();
+
+		auto setting = fields.find(GeneralBuildSettings::CPP_COMP_ARGS);
+		if (setting != fields.end())
+		{
+			s.cppCompilerArgs = (*setting).second->vector(); // extra user defined c++ compiler arguments
+		}
+		setting = fields.find(GeneralBuildSettings::C_COMP_ARGS);
+		if (setting != fields.end())
+		{
+			s.cCompilerArgs = (*setting).second->vector(); // extra user defined c compiler arguments
+		}
+		setting = fields.find(GeneralBuildSettings::LNK_ARGS);
+		if (setting != fields.end())
+		{
+			s.linkerArgs = (*setting).second->vector(); // extra user defined linker arguments
+		}
+		return s;
 	}
 
 	ETargetType ConfigUtils::targetTypeFromString(std::string_view str)

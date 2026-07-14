@@ -35,7 +35,7 @@ namespace EuropaBuild
 
 		static void createRelativeDirectory(const fs::path& path);
 
-		static void writeCompilerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
+		static void writeCompilerRule(std::ofstream& out, const std::string& ruleName, const EuropaBuild::FindTool::Compiler& compiler);
 
 		static void writeLinkerRule(std::ofstream& out, std::shared_ptr<FindTool::Toolchain> toolchain);
 
@@ -54,6 +54,9 @@ namespace EuropaBuild
 			std::shared_ptr<FindTool::Toolchain> toolchain);
 
 		static std::string libraryArgs(const Target& target);
+
+		static std::string colorWordInText(std::string text, std::string word, const char* color);
+		static std::string colorLinesInText(const std::string& text, const std::string& word, const char* color);
 
 	};
 
