@@ -1,0 +1,45 @@
+# EuropaBuild C++ Generated build file
+# ====================================
+
+ninja_required_version = 1.8.2
+
+rule cpp_compile
+  command = clang++ -c ${ARGS} -o ${out} ${in}
+  description = Compiling C++ object ${out}
+
+rule cpp_link
+  command = clang++ ${ARGS} -o ${out} ${in}
+  description = Linking executable ${out}
+
+rule cpp_archive
+  command = ar rcs ${out} ${in}
+  description = Creating static library ${out}
+
+
+build intermediate\Parser0.o: cpp_compile src\europasoft-json\Source\Parser.cpp
+  ARGS = -std=c++20
+
+build intermediate\process1.o: cpp_compile src\util\process.cpp
+  ARGS = "-Isrc/" "-Isrc/util" -std=c++20
+
+build intermediate\build2.o: cpp_compile src\EuropaBuild\build.cpp
+  ARGS = "-Isrc/" "-Isrc/EuropaBuild/" -std=c++20
+
+build intermediate\config3.o: cpp_compile src\EuropaBuild\config.cpp
+  ARGS = "-Isrc/" "-Isrc/EuropaBuild/" -std=c++20
+
+build intermediate\findtool4.o: cpp_compile src\EuropaBuild\findtool.cpp
+  ARGS = "-Isrc/" "-Isrc/EuropaBuild/" -std=c++20
+
+build intermediate\main5.o: cpp_compile src\EuropaBuild\main.cpp
+  ARGS = "-Isrc/" "-Isrc/EuropaBuild/" -std=c++20
+
+build intermediate\tree6.o: cpp_compile src\EuropaBuild\tree.cpp
+  ARGS = "-Isrc/" "-Isrc/EuropaBuild/" -std=c++20
+
+build intermediate\vs7.o: cpp_compile src\EuropaBuild\vs.cpp
+  ARGS = "-Isrc/" "-Isrc/EuropaBuild/" -std=c++20
+
+build SelfBuild/EuropaBuildSelf.exe: cpp_link intermediate\build2.o intermediate\config3.o intermediate\findtool4.o intermediate\main5.o intermediate\tree6.o intermediate\vs7.o intermediate\process1.o intermediate\Parser0.o
+
+default SelfBuild/EuropaBuildSelf.exe 
